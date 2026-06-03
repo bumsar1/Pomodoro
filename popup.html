@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Pomodoro Blocker</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      width: 310px;
+      max-height: 640px;
+      overflow-y: auto;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #1a1a2e;
+      color: #eee;
+      scrollbar-width: thin;
+      scrollbar-color: #2a2a4a transparent;
+    }
+
+    /* ── Header ── */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 18px 10px;
+    }
+    .header-left { display: flex; align-items: center; gap: 8px; }
+    .header h1 { font-size: 13px; font-weight: 700; letter-spacing: 1.5px; color: #6060a0; text-transform: uppercase; }
+    .strict-badge {
+      display: none;
+      background: #e74c3c;
+      color: #fff;
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      text-transform: uppercase;
+    }
+    .strict-badge.visible { display: inline-block; }
+    .settings-toggle { background: none; border: none; color: #444; cursor: pointer; font-size: 18px; padding: 2px 4px; border-radius: 4px; transition: color 0.15s; }
+    .settings-toggle:hover { color: #aaa; }
+
+    /* ── Task wrap ── */
+    .task-wrap { padding: 0 18px 10px; }
+    .task-input {
+      width: 100%;
+      padding: 8px 12px;
+      background: #20203a;
+      border: 1px solid #2a2a4a;
+      border-radius: 8px;
+      color: #ccc;
+      font-size: 13px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .task-input::placeholder { color: #333; }
+    .task-input:focus { border-color: #5050a0; }
+    .task-display {
+      display: none;
+      padding: 7px 12px;
+      background: #20203a;
+      border-radius: 8px;
+      font-size: 12px;
+      color: #888;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .task-display .task-icon { margin-right: 6px; }
+    .task-display .task-text { color: #bbb; font-weight: 500; }
+
+    /* ── Timer ring ── */
+    .timer-ring { display: flex; justify-content: center; align-items: center; padding: 6px 0 4px; }
+    .ring-wrap { position: relative; width: 140px; height: 140px; }
+    .ring-wrap svg { transform: rotate(-90deg); }
+    .ring-bg       { fill: none; stroke: #252540; stroke-width: 8; }
+    .ring-progress { fill: none; stroke-width: 8; stroke-linecap: round; transition: stroke-dashoffset 1s linear, stroke 0.4s; }
+    .timer-text { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+    .timer-digits { font-size: 34px; font-weight: 700; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
+    .timer-label  { font-size: 10px; color: #555; text-transform: uppercase; letter-spacing: 1.5px; }
+
+    /* ── Round dots ── */
+    .round-dots { display: flex; justify-content: center; gap: 6px; padding: 6px 0 4px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #252540; transition: background 0.3s; }
+    .dot.filled { background: #e74c3c; }
+    .dot.long   { background: #9b59b6; }
+
+    /* ── Phase badge ── */
+    .phase-badge { text-align: center; padding: 2px 0 10px; font-size: 11px; font-weight: 700; letter-spacing: 2.5px; text-transform: uppercase; }
+    .phase-work      { color: #e74c3c; }
+    .phase-break     { color: #2ecc71; }
+    .phase-longbreak { color: #9b59b6; }
+    .phase-idle      { color: #444; }
+
+    /* ── Controls ── */
+    .controls { display: flex; gap: 7px; padding: 0 18px 14px; }
+    .btn { flex: 1; padding: 10px 6px; border: none; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; transition: opacity 0.15s, transform 0.1s; white-space: nowrap; }
+    .btn:active   { transform: scale(0.96); }
+    .btn:disabled { opacity: 0.25; cursor: not-allowed; }
+    .btn-start { background: #e74c3c; color: #fff; }
+    .btn-break { background: #2ecc71; color: #fff; }
+    .btn-stop  { background: #252540; color: #777; border: 1px solid #333; }
+    .btn-stop.counting { color: #f39c12; border-color: #f39c12; }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-4px); }
+      75% { transform: translateX(4px); }
+    }
+    .btn.shake { animation: shake 0.25s ease; }
+
+    /* ── Reason form ── */
+    .reason-form {
+      display: none;
+      margin: 0 18px 14px;
+      background: #1e1e38;
+      border: 1px solid #e74c3c44;
+      border-radius: 10px;
+      padding: 14px;
+    }
+    .reason-form.visible { display: block; }
+    .reason-prompt { font-size: 12px; color: #e74c3c; font-weight: 600; margin-bottom: 8px; }
+    .reason-form textarea {
+      width: 100%;
+      background: #252545;
+      border: 1px solid #3a3a6a;
+      border-radius: 6px;
+      color: #ccc;
+      font-size: 12px;
+      padding: 8px 10px;
+      resize: none;
+      outline: none;
+      font-family: inherit;
+      line-height: 1.4;
+    }
+    .reason-form textarea:focus { border-color: #e74c3c88; }
+    .reason-form textarea::placeholder { color: #3a3a5a; }
+    .reason-actions { display: flex; gap: 7px; margin-top: 8px; }
+    .btn-abandon { flex: 1; padding: 8px; background: #e74c3c; color: #fff; border: none; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; }
+    .btn-cancel-reason { padding: 8px 12px; background: #252540; color: #666; border: 1px solid #333; border-radius: 6px; font-size: 12px; cursor: pointer; }
+
+    /* ── Break suggestions ── */
+    .break-panel {
+      display: none;
+      margin: 0 18px 14px;
+      background: #0e2a1a;
+      border: 1px solid #2ecc7130;
+      border-radius: 10px;
+      padding: 14px 16px;
+      text-align: center;
+    }
+    .break-panel.visible { display: block; }
+    .break-icon { font-size: 28px; margin-bottom: 6px; }
+    .break-suggestion-text { font-size: 14px; color: #2ecc71; font-weight: 500; margin-bottom: 8px; line-height: 1.4; }
+    .break-next-btn { background: none; border: none; color: #1a6040; font-size: 11px; cursor: pointer; text-decoration: underline; }
+    .break-next-btn:hover { color: #2ecc71; }
+
+    /* ── Stats ── */
+    .stats { display: flex; justify-content: space-around; padding: 0 18px 14px; }
+    .stat { text-align: center; }
+    .stat-val { font-size: 20px; font-weight: 700; color: #eee; font-variant-numeric: tabular-nums; }
+    .stat-lbl { font-size: 10px; color: #444; text-transform: uppercase; letter-spacing: 1px; margin-top: 1px; }
+
+    /* ── Divider ── */
+    .divider { height: 1px; background: #252540; margin: 0 18px; }
+
+    /* ── Sections ── */
+    .section { padding: 12px 18px 14px; }
+    .section-title { font-size: 10px; font-weight: 700; color: #444; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+    .add-row { display: flex; gap: 7px; }
+    .add-row input { flex: 1; padding: 7px 10px; background: #252540; border: 1px solid #333; border-radius: 6px; color: #eee; font-size: 12px; outline: none; }
+    .add-row input::placeholder { color: #3a3a5a; }
+    .add-row input:focus { border-color: #5050a0; }
+    .add-row input:disabled { opacity: 0.3; cursor: not-allowed; }
+    .add-row button { padding: 7px 12px; background: #353578; color: #ccc; border: none; border-radius: 6px; cursor: pointer; font-size: 18px; line-height: 1; }
+    .add-row button:hover { background: #4545a0; }
+    .add-row button:disabled { opacity: 0.3; cursor: not-allowed; }
+    .blacklist { margin-top: 8px; max-height: 100px; overflow-y: auto; }
+    .blacklist:empty::before { content: "No sites added yet"; color: #333; font-size: 12px; display: block; padding: 4px 0; }
+    .site-item { display: flex; align-items: center; padding: 4px 7px; border-radius: 5px; font-size: 12px; color: #888; margin-bottom: 3px; background: #20203a; }
+    .site-item .domain { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .site-item .remove { background: none; border: none; color: #333; cursor: pointer; font-size: 16px; padding: 0 2px; line-height: 1; }
+    .site-item .remove:hover { color: #e74c3c; }
+    .site-item .remove:disabled { opacity: 0.2; cursor: not-allowed; }
+
+    /* ── Settings panel ── */
+    .settings-panel { display: none; padding: 12px 18px 14px; border-top: 1px solid #252540; }
+    .settings-panel.open { display: block; }
+    .setting-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .setting-row:last-child { margin-bottom: 0; }
+    .setting-lbl { font-size: 12px; color: #888; }
+    .setting-row input[type="number"] { width: 52px; padding: 5px 8px; background: #252540; border: 1px solid #333; border-radius: 5px; color: #eee; font-size: 12px; text-align: center; outline: none; }
+    .setting-row input[type="number"]:focus { border-color: #5050a0; }
+    .setting-row input[type="range"] { width: 90px; accent-color: #5050a0; }
+
+    .settings-sep { height: 1px; background: #252540; margin: 10px 0; }
+
+    .toggle { position: relative; width: 36px; height: 20px; flex-shrink: 0; }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; inset: 0; background: #333; border-radius: 20px; cursor: pointer; transition: background 0.2s; }
+    .slider::before { content: ""; position: absolute; width: 14px; height: 14px; left: 3px; bottom: 3px; background: #666; border-radius: 50%; transition: transform 0.2s, background 0.2s; }
+    .toggle input:checked + .slider { background: #353578; }
+    .toggle input:checked + .slider::before { transform: translateX(16px); background: #8080d0; }
+
+    .sound-select { background: #252540; border: 1px solid #333; border-radius: 5px; color: #ccc; font-size: 12px; padding: 5px 8px; outline: none; cursor: pointer; }
+    .sound-select:focus { border-color: #5050a0; }
+
+    .save-settings { width: 100%; margin-top: 12px; padding: 8px; background: #353578; color: #ccc; border: none; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; transition: background 0.15s; }
+    .save-settings:hover { background: #4545a0; }
+    .saved-msg { text-align: center; font-size: 11px; color: #2ecc71; margin-top: 6px; height: 14px; }
+
+    /* ── Heatmap panel ── */
+    .heatmap-panel { border-top: 1px solid #252540; }
+    .heatmap-toggle {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 18px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #444;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .heatmap-toggle:hover { color: #777; }
+    .heatmap-toggle .arrow { transition: transform 0.2s; }
+    .heatmap-toggle.open .arrow { transform: rotate(180deg); }
+
+    .heatmap-body { display: none; padding: 0 18px 16px; }
+    .heatmap-body.open { display: block; }
+
+    .hmap-labels { display: flex; justify-content: space-around; margin-bottom: 4px; }
+    .hmap-day-lbl { font-size: 9px; color: #333; text-align: center; width: 100%; }
+
+    .hmap-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 3px;
+    }
+    .hcell {
+      aspect-ratio: 1;
+      border-radius: 2px;
+      background: #1e1e35;
+      cursor: default;
+      transition: opacity 0.1s;
+    }
+    .hcell:hover { opacity: 0.8; }
+
+    .hmap-legend { display: flex; align-items: center; gap: 5px; margin-top: 8px; justify-content: flex-end; }
+    .hmap-legend span { font-size: 10px; color: #333; }
+    .legend-cell { width: 10px; height: 10px; border-radius: 2px; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="header-left">
+      <h1>🍅 Pomodoro</h1>
+      <span class="strict-badge" id="strictBadge">strict</span>
+    </div>
+    <button class="settings-toggle" id="settingsToggle" title="Settings">⚙</button>
+  </div>
+
+  <div class="task-wrap">
+    <input  class="task-input"   id="taskInput"   type="text" placeholder="What are you working on?" maxlength="60" />
+    <div    class="task-display" id="taskDisplay">
+      <span class="task-icon">📌</span><span class="task-text" id="taskText"></span>
+    </div>
+  </div>
+
+  <div class="timer-ring">
+    <div class="ring-wrap">
+      <svg width="140" height="140" viewBox="0 0 140 140">
+        <circle class="ring-bg" cx="70" cy="70" r="60" />
+        <circle class="ring-progress" id="ringProgress" cx="70" cy="70" r="60"
+          stroke-dasharray="377" stroke-dashoffset="0" stroke="#e74c3c" />
+      </svg>
+      <div class="timer-text">
+        <div class="timer-digits" id="timerDisplay">25:00</div>
+        <div class="timer-label"  id="timerLabel">ready</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="round-dots" id="roundDots">
+    <div class="dot" id="d0"></div>
+    <div class="dot" id="d1"></div>
+    <div class="dot" id="d2"></div>
+    <div class="dot" id="d3"></div>
+  </div>
+
+  <div class="phase-badge phase-idle" id="phaseBadge">IDLE</div>
+
+  <div class="controls" id="controlsRow">
+    <button class="btn btn-start" id="btnStart">▶ Focus</button>
+    <button class="btn btn-break" id="btnBreak" disabled>☕ Break</button>
+    <button class="btn btn-stop"  id="btnStop"  disabled>■ Stop</button>
+  </div>
+
+  <!-- Strict mode reason form (replaces controls) -->
+  <div class="reason-form" id="reasonForm">
+    <div class="reason-prompt">Why are you stopping early?</div>
+    <textarea id="reasonInput" rows="3" placeholder="e.g. Urgent meeting, emergency..."></textarea>
+    <div class="reason-actions">
+      <button class="btn-cancel-reason" id="cancelReason">← Keep going</button>
+      <button class="btn-abandon" id="confirmAbandon">Abandon session</button>
+    </div>
+  </div>
+
+  <!-- Break suggestions -->
+  <div class="break-panel" id="breakPanel">
+    <div class="break-icon" id="breakIcon">🚶</div>
+    <div class="break-suggestion-text" id="breakText">Take a short walk</div>
+    <button class="break-next-btn" id="breakNextBtn">suggest something else</button>
+  </div>
+
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-val" id="sessionsCount">0</div>
+      <div class="stat-lbl">today</div>
+    </div>
+    <div class="stat">
+      <div class="stat-val" id="focusTime">0m</div>
+      <div class="stat-lbl">focused</div>
+    </div>
+    <div class="stat">
+      <div class="stat-val" id="blockedCount">0</div>
+      <div class="stat-lbl">blocked</div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="section">
+    <div class="section-title">Blocked sites</div>
+    <div class="add-row">
+      <input id="siteInput" type="text" placeholder="youtube.com" />
+      <button id="addSiteBtn">+</button>
+    </div>
+    <div class="blacklist" id="blacklist"></div>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="section">
+    <div class="section-title" style="color:#2ecc71;opacity:0.7">Always allowed</div>
+    <div style="font-size:11px;color:#2a2a4a;margin-bottom:8px;line-height:1.4">
+      Exceptions — overrides blocked sites (e.g. <code style="color:#333">music.youtube.com</code>).
+    </div>
+    <div class="add-row">
+      <input id="whiteInput" type="text" placeholder="music.youtube.com" />
+      <button id="addWhiteBtn" style="background:#1a4a2a;color:#2ecc71">+</button>
+    </div>
+    <div class="blacklist" id="whitelist"></div>
+  </div>
+
+  <!-- Settings panel -->
+  <div class="settings-panel" id="settingsPanel">
+    <div class="section-title">Timer</div>
+
+    <div class="setting-row">
+      <span class="setting-lbl">Focus</span>
+      <div style="display:flex;align-items:center;gap:5px">
+        <input type="number" id="setWork" min="1" max="120" value="25" />
+        <span style="font-size:11px;color:#444">min</span>
+      </div>
+    </div>
+    <div class="setting-row">
+      <span class="setting-lbl">Short break</span>
+      <div style="display:flex;align-items:center;gap:5px">
+        <input type="number" id="setBreak" min="1" max="60" value="5" />
+        <span style="font-size:11px;color:#444">min</span>
+      </div>
+    </div>
+    <div class="setting-row">
+      <span class="setting-lbl">Long break</span>
+      <div style="display:flex;align-items:center;gap:5px">
+        <input type="number" id="setLongBreak" min="1" max="60" value="15" />
+        <span style="font-size:11px;color:#444">min</span>
+      </div>
+    </div>
+    <div class="setting-row">
+      <span class="setting-lbl">Long break every</span>
+      <div style="display:flex;align-items:center;gap:5px">
+        <input type="number" id="setLongBreakAfter" min="2" max="10" value="4" />
+        <span style="font-size:11px;color:#444">sessions</span>
+      </div>
+    </div>
+    <div class="setting-row">
+      <span class="setting-lbl">Auto-start next</span>
+      <label class="toggle"><input type="checkbox" id="setAutoStart" /><span class="slider"></span></label>
+    </div>
+
+    <div class="settings-sep"></div>
+    <div class="section-title" style="margin-bottom:8px">Focus</div>
+
+    <div class="setting-row">
+      <span class="setting-lbl">Strict mode</span>
+      <label class="toggle"><input type="checkbox" id="setStrictMode" /><span class="slider"></span></label>
+    </div>
+    <div style="font-size:10px;color:#333;margin-bottom:10px;line-height:1.4">
+      Stop requires 10 clicks + a reason. Can't modify blocked sites during work.
+    </div>
+
+    <div class="settings-sep"></div>
+    <div class="section-title" style="margin-bottom:8px">Ambient sound</div>
+
+    <div class="setting-row">
+      <span class="setting-lbl">Sound</span>
+      <select class="sound-select" id="setSoundType">
+        <option value="off">Off</option>
+        <option value="white">White noise</option>
+        <option value="brown">Brown noise</option>
+        <option value="rain">Rain</option>
+      </select>
+    </div>
+    <div class="setting-row" id="volumeRow" style="display:none">
+      <span class="setting-lbl">Volume</span>
+      <input type="range" id="setSoundVolume" min="0" max="1" step="0.05" value="0.4" />
+    </div>
+    <div style="font-size:10px;color:#333;margin-bottom:2px;line-height:1.4">
+      Plays while this popup is open.
+    </div>
+
+    <button class="save-settings" id="saveSettings">Save settings</button>
+    <div class="saved-msg" id="savedMsg"></div>
+  </div>
+
+  <!-- Heatmap panel -->
+  <div class="heatmap-panel">
+    <button class="heatmap-toggle" id="heatmapToggle">
+      <span>Focus history</span>
+      <span class="arrow">▾</span>
+    </button>
+    <div class="heatmap-body" id="heatmapBody">
+      <div class="hmap-labels">
+        <span class="hmap-day-lbl">M</span>
+        <span class="hmap-day-lbl">T</span>
+        <span class="hmap-day-lbl">W</span>
+        <span class="hmap-day-lbl">T</span>
+        <span class="hmap-day-lbl">F</span>
+        <span class="hmap-day-lbl">S</span>
+        <span class="hmap-day-lbl">S</span>
+      </div>
+      <div class="hmap-grid" id="hmapGrid"></div>
+      <div class="hmap-legend">
+        <span>Less</span>
+        <div class="legend-cell" style="background:#1e1e35"></div>
+        <div class="legend-cell" style="background:#4a1a2a"></div>
+        <div class="legend-cell" style="background:#8a2535"></div>
+        <div class="legend-cell" style="background:#c03040"></div>
+        <div class="legend-cell" style="background:#e74c3c"></div>
+        <span>More</span>
+      </div>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

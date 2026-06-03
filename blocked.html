@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Site Blocked</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #1a1a2e;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: #eee;
+    }
+
+    .card {
+      text-align: center;
+      max-width: 420px;
+      padding: 52px 44px;
+    }
+
+    .tomato {
+      font-size: 72px;
+      margin-bottom: 28px;
+      display: block;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50%       { transform: scale(1.06); }
+    }
+
+    h1 {
+      font-size: 26px;
+      font-weight: 800;
+      margin-bottom: 10px;
+      color: #e74c3c;
+      letter-spacing: -0.5px;
+    }
+
+    .subtitle {
+      font-size: 14px;
+      color: #555;
+      line-height: 1.6;
+      margin-bottom: 36px;
+    }
+
+    .timer {
+      font-size: 56px;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      font-feature-settings: "tnum";
+      color: #e74c3c;
+      letter-spacing: 2px;
+      margin-bottom: 6px;
+      transition: color 0.4s;
+      font-family: "SF Mono", "Fira Mono", "Courier New", monospace;
+    }
+
+    .timer.ending { color: #f39c12; }
+    .timer.idle   { color: #3a3a6a; font-size: 20px; letter-spacing: 0; font-family: inherit; font-weight: 600; }
+
+    .timer-label {
+      font-size: 11px;
+      color: #4a4a6a;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      margin-bottom: 36px;
+    }
+
+    .actions {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+    }
+
+    .btn {
+      padding: 11px 24px;
+      border-radius: 8px;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: background 0.15s, transform 0.1s;
+    }
+    .btn:active { transform: scale(0.97); }
+
+    .btn-back {
+      background: #252540;
+      color: #777;
+      border: 1px solid #333;
+    }
+    .btn-back:hover { background: #303055; }
+
+    .current-task {
+      display: inline-block;
+      margin-bottom: 16px;
+      padding: 5px 14px;
+      background: #252540;
+      border-radius: 20px;
+      font-size: 13px;
+      color: #8080c0;
+      border: 1px solid #3a3a6a;
+    }
+
+    .quote {
+      margin-top: 36px;
+      font-size: 14px;
+      color: #7070a0;
+      font-style: italic;
+      line-height: 1.6;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <span class="tomato">🍅</span>
+    <h1>Stay focused.</h1>
+    <div class="current-task" id="currentTask" style="display:none">
+      <span id="taskLabel"></span>
+    </div>
+    <p class="subtitle">This site is blocked during your focus session.<br>You've got this — the break is coming.</p>
+    <div class="timer" id="timer">--:--</div>
+    <div class="timer-label">remaining in session</div>
+    <div class="actions">
+      <a class="btn btn-back" onclick="history.back()">← Go back</a>
+    </div>
+    <div class="quote" id="quote"></div>
+  </div>
+
+  <script>
+    const QUOTES = [
+      // Focus & discipline
+      { q: "The successful warrior is the average man, with laser-like focus.", a: "Bruce Lee" },
+      { q: "Concentrate all your thoughts upon the work at hand. The sun's rays do not burn until brought to a focus.", a: "Alexander Graham Bell" },
+      { q: "Deep work is the superpower of the 21st century.", a: "Cal Newport" },
+      { q: "Until we can manage time, we can manage nothing else.", a: "Peter Drucker" },
+      { q: "Lost time is never found again.", a: "Benjamin Franklin" },
+      { q: "It is during our darkest moments that we must focus to see the light.", a: "Aristotle" },
+
+      // Starting & action
+      { q: "The best way to get started is to quit talking and begin doing.", a: "Walt Disney" },
+      { q: "You don't have to be great to start, but you have to start to be great.", a: "Zig Ziglar" },
+      { q: "Knowing is not enough; we must apply. Willing is not enough; we must do.", a: "Johann Wolfgang von Goethe" },
+      { q: "Do what you can with all you have, wherever you are.", a: "Theodore Roosevelt" },
+      { q: "While one person hesitates because he feels inferior, the other is busy making mistakes and becoming superior.", a: "Henry Link" },
+      { q: "Move out of your comfort zone. You can only grow if you are willing to feel awkward and uncomfortable.", a: "Brian Tracy" },
+
+      // Belief & mindset
+      { q: "Whether you think you can or think you can't, you're right.", a: "Henry Ford" },
+      { q: "Believe you can and you're halfway there.", a: "Theodore Roosevelt" },
+      { q: "Doubt kills more dreams than failure ever will.", a: "Suzy Kassem" },
+      { q: "Everything you've ever wanted is on the other side of fear.", a: "George Addair" },
+      { q: "Nothing great was ever achieved without enthusiasm.", a: "Ralph Waldo Emerson" },
+      { q: "The happiness of your life depends on the quality of your thoughts.", a: "Marcus Aurelius" },
+
+      // Time & results
+      { q: "The bad news is time flies. The good news is you're the pilot.", a: "Michael Altshuler" },
+      { q: "Don't count the days. Make the days count.", a: "Muhammad Ali" },
+      { q: "Don't let yesterday take up too much of today.", a: "Will Rogers" },
+      { q: "Today's accomplishments were yesterday's impossibilities.", a: "Robert H. Schuller" },
+      { q: "All our dreams can come true, if we have the courage to pursue them.", a: "Walt Disney" },
+
+      // Resilience
+      { q: "Success is not final, failure is not fatal: it is the courage to continue that counts.", a: "Winston Churchill" },
+      { q: "I have not failed. I've just found 10,000 ways that won't work.", a: "Thomas Edison" },
+      { q: "Our greatest glory is not in never failing, but in rising every time we fall.", a: "Ralph Waldo Emerson" },
+      { q: "The only way to do great work is to love what you do.", a: "Steve Jobs" },
+      { q: "May your choices reflect your hopes, not your fears.", a: "Nelson Mandela" },
+    ];
+
+    const pick = QUOTES[Math.floor(Date.now() / 30000) % QUOTES.length];
+    const quoteEl = document.getElementById("quote");
+    quoteEl.innerHTML = `<em>"${pick.q}"</em><br><span style="color:#5a5a8a;font-style:normal;font-size:12px;margin-top:8px;display:block">— ${pick.a}</span>`;
+
+    function formatTime(ms) {
+      const total = Math.max(0, Math.ceil(ms / 1000));
+      const m = Math.floor(total / 60).toString().padStart(2, "0");
+      const s = (total % 60).toString().padStart(2, "0");
+      return `${m}:${s}`;
+    }
+
+    // Show task label if one is set
+    chrome.storage.local.get("currentTask").then(data => {
+      if (data.currentTask) {
+        const el = document.getElementById("currentTask");
+        document.getElementById("taskLabel").textContent = "📌 " + data.currentTask;
+        el.style.display = "inline-block";
+      }
+    });
+
+    const timerLabel = document.querySelector(".timer-label");
+
+    async function tick() {
+      const data = await chrome.storage.local.get(["phase", "endTime"]);
+      const el = document.getElementById("timer");
+
+      if (data.phase === "work" && data.endTime && data.endTime > Date.now()) {
+        const remaining = data.endTime - Date.now();
+        el.textContent = formatTime(remaining);
+        el.className = "timer" + (remaining < 60_000 ? " ending" : "");
+        timerLabel.textContent = "remaining in session";
+      } else {
+        // No active session — extension may have reloaded or session ended
+        el.textContent = "Start a session";
+        el.className = "timer idle";
+        timerLabel.textContent = "click the extension to begin";
+      }
+    }
+
+    tick();
+    setInterval(tick, 1000);
+  </script>
+</body>
+</html>
