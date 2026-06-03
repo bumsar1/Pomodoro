@@ -9,7 +9,8 @@
     "storage",
     "alarms",
     "tabs",
-    "notifications"
+    "notifications",
+    "offscreen"
   ],
   "host_permissions": ["<all_urls>"],
   "background": {

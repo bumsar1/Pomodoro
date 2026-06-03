@@ -86,6 +86,34 @@ async function updateFocusHistory(workMin) {
   return hist;
 }
 
+async function ensureOffscreenDoc() {
+  const existing = await chrome.runtime.getContexts({
+    contextTypes: ["OFFSCREEN_DOCUMENT"],
+    documentUrls: [chrome.runtime.getURL("offscreen.html")],
+  });
+  if (existing.length === 0) {
+    await chrome.offscreen.createDocument({
+      url: chrome.runtime.getURL("offscreen.html"),
+      reasons: ["AUDIO_PLAYBACK"],
+      justification: "Play 5-minute interval ping during focus sessions",
+    });
+  }
+}
+
+async function playPingSound() {
+  try {
+    await ensureOffscreenDoc();
+    chrome.runtime.sendMessage({ target: "offscreen", type: "PLAY_PING", volume: 0.35 });
+    // Close doc after sound finishes so it doesn't linger
+    setTimeout(async () => {
+      const ctxs = await chrome.runtime.getContexts({ contextTypes: ["OFFSCREEN_DOCUMENT"] });
+      if (ctxs.length > 0) await chrome.offscreen.closeDocument();
+    }, 3000);
+  } catch (e) {
+    console.warn("Ping sound failed:", e);
+  }
+}
+
 async function startWork() {
   const [state, settings] = await Promise.all([getState(), getSettings()]);
   const ms      = settings.workMin * 60 * 1000;
@@ -98,6 +126,7 @@ async function startWork() {
   await chrome.alarms.clearAll();
   await chrome.alarms.create("pomodoroTick", { periodInMinutes: 1 / 60 });
   await chrome.alarms.create("phaseEnd",     { delayInMinutes: settings.workMin });
+  await chrome.alarms.create("minutePing",   { periodInMinutes: 5 });
   updateBadge("work", endTime);
 }
 
@@ -148,6 +177,10 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === "pomodoroTick") {
     const state = await getState();
     if (state.endTime) updateBadge(state.phase, state.endTime);
+  }
+
+  if (alarm.name === "minutePing") {
+    await playPingSound();
   }
 
   if (alarm.name === "phaseEnd") {
