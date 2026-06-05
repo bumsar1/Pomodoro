@@ -530,9 +530,21 @@ function updateGoalPreview() {
   const workMin  = parseInt(els.setWork.value,     10) || 25;
   const breakMin = parseInt(els.setBreak.value,    10) || 5;
   const { cycles, lastWork } = calculateGoal(totalMin, workMin, breakMin);
-  const regular = cycles > 1 ? `${cycles - 1} × ${workMin}min + ${breakMin}min break, ` : "";
-  const last    = lastWork !== workMin ? `last session ${lastWork}min` : `last ${workMin}min`;
-  els.goalPreview.textContent = `${regular}${last} = ${totalMin} min total`;
+
+  // Every cycle = work + break (including the last one)
+  const actualTotal = (cycles - 1) * (workMin + breakMin) + (lastWork + breakMin);
+
+  let text;
+  if (lastWork !== workMin) {
+    // Last session is slightly longer due to leftover time
+    text = `${cycles - 1} × ${workMin}min work + ${breakMin}min break, `
+         + `then ${lastWork}min work + ${breakMin}min break`
+         + ` = ${actualTotal} min`;
+  } else {
+    text = `${cycles} × ${workMin}min work + ${breakMin}min break = ${actualTotal} min`;
+  }
+
+  els.goalPreview.textContent = text;
   els.goalPreview.classList.add("visible");
 }
 
