@@ -68,6 +68,18 @@ def is_running(name):
         return False
 
 
+# Alarm sound played when a blocked app is caught and quit.
+ALARM_SOUND = "/System/Library/Sounds/Basso.aiff"
+
+
+def play_alarm():
+    """Play the macOS alarm sound (non-blocking)."""
+    try:
+        subprocess.Popen(["afplay", ALARM_SOUND])
+    except Exception as e:
+        log(f"alarm error: {e}")
+
+
 def quit_app(name):
     """Force-quit an app by exact process name. Returns True if it was running."""
     try:
@@ -92,6 +104,8 @@ def enforce():
     for app in apps:
         if quit_app(app):
             killed.append(app)
+    if killed:
+        play_alarm()
     return killed
 
 
