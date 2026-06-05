@@ -86,7 +86,6 @@ const els = {
   hmapGrid:           document.getElementById("hmapGrid"),
   heatmapToggle:      document.getElementById("heatmapToggle"),
   heatmapBody:        document.getElementById("heatmapBody"),
-  dots:               [0, 1, 2, 3].map((i) => document.getElementById(`d${i}`)),
   // Goal
   goalSection:        document.getElementById("goalSection"),
   goalEnabled:        document.getElementById("goalEnabled"),
@@ -328,14 +327,37 @@ function setRing(fraction, phase) {
   els.ringProgress.style.stroke           = phaseColor(phase);
 }
 
-function updateDots(round, longBreakAfter) {
-  const n      = longBreakAfter ?? 4;
-  const filled = round % n;
-  els.dots.forEach((dot, i) => {
+function renderDots(state, s) {
+  const container = document.getElementById("roundDots");
+  let count, filled, longIndex = -1;
+
+  if (state.goalActive && state.goalCycles > 0) {
+    // Goal session: one dot per planned session
+    count  = state.goalCycles;
+    filled = state.goalCycles - state.goalCyclesLeft;
+  } else if (state.phase === "idle" && els.goalEnabled.checked) {
+    // Idle preview of a goal about to start
+    const totalMin = parseInt(els.goalMinutes.value, 10) || 60;
+    const workMin  = parseInt(els.setWork.value, 10)     || s.workMin  || 25;
+    const breakMin = parseInt(els.setBreak.value, 10)    || s.breakMin || 5;
+    count  = calculateGoal(totalMin, workMin, breakMin).cycles;
+    filled = 0;
+  } else {
+    // Normal mode: dots count up to a long break
+    count  = s.longBreakAfter ?? 4;
+    const round = state.round ?? 0;
+    filled = round % count;
+    if (filled === 0 && round > 0) longIndex = count - 1;
+  }
+
+  container.innerHTML = "";
+  for (let i = 0; i < count; i++) {
+    const dot = document.createElement("div");
     dot.className = "dot";
-    if (i < filled)                              dot.classList.add("filled");
-    if (filled === 0 && round > 0 && i === n - 1) dot.classList.add("long");
-  });
+    if (i < filled)        dot.classList.add("filled");
+    if (i === longIndex)   dot.classList.add("long");
+    container.appendChild(dot);
+  }
 }
 
 function sendMsg(msg) {
@@ -366,7 +388,7 @@ function renderState(state) {
   els.phaseBadge.className   = `phase-badge phase-${phase}`;
 
   setRing(fraction, phase);
-  updateDots(round ?? 0, s.longBreakAfter);
+  renderDots(state, s);
   renderGoalProgress(state, s);
 
   // Focus time stat
@@ -1016,11 +1038,17 @@ els.presetList.addEventListener("click", async (e) => {
 });
 
 // Goal listeners
-els.goalEnabled.addEventListener("change", updateGoalPreview);
-els.goalMinutes.addEventListener("input",  updateGoalPreview);
+async function refreshDots() {
+  const state = await sendMsg({ type: "GET_STATE" });
+  renderDots(state, state.settings ?? {});
+}
+function onGoalInput() { updateGoalPreview(); refreshDots(); }
+
+els.goalEnabled.addEventListener("change", onGoalInput);
+els.goalMinutes.addEventListener("input",  onGoalInput);
 // Also update preview when work/break durations change in settings
-els.setWork.addEventListener("input",  updateGoalPreview);
-els.setBreak.addEventListener("input", updateGoalPreview);
+els.setWork.addEventListener("input",  onGoalInput);
+els.setBreak.addEventListener("input", onGoalInput);
 
 // Mode pill listeners
 els.modeBlacklistBtn.addEventListener("click", () => {
@@ -1059,6 +1087,7 @@ document.getElementById("durationPill").addEventListener("click", () => {
   if (state.goalActive && state.goalCycles > 0) {
     els.goalEnabled.checked = true;
     updateGoalPreview();
+    renderDots(state, state.settings ?? {});
   }
 
   // Restore sound if session is active
