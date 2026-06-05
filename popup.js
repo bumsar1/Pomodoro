@@ -533,9 +533,6 @@ function updateGoalPreview() {
   const breakMin = parseInt(els.setBreak.value,    10) || 5;
   const { cycles, lastWork } = calculateGoal(totalMin, workMin, breakMin);
 
-  // Every cycle = work + break (including the last one)
-  const actualTotal = (cycles - 1) * (workMin + breakMin) + (lastWork + breakMin);
-
   // No break after the final session
   const actualTotal = (cycles - 1) * (workMin + breakMin) + lastWork;
   let text;
