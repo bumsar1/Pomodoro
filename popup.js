@@ -514,10 +514,11 @@ function renderHeatmap(focusHistory) {
 // ── Goal mode ─────────────────────────────────────────────────────────────────
 
 function calculateGoal(totalMin, workMin, breakMin) {
-  const cycleTime  = workMin + breakMin;
-  const cycles     = Math.max(1, Math.floor(totalMin / cycleTime));
-  const leftover   = totalMin - cycles * cycleTime;
-  const lastWork   = workMin + (leftover >= 1 ? leftover : 0);
+  // No break after the last session, so:
+  // (cycles - 1) × (work + break) + lastWork = total
+  const cycleTime = workMin + breakMin;
+  const cycles    = Math.max(1, Math.floor((totalMin - workMin) / cycleTime) + 1);
+  const lastWork  = totalMin - (cycles - 1) * cycleTime;
   return { cycles, lastWork, cycleTime };
 }
 
@@ -534,14 +535,15 @@ function updateGoalPreview() {
   // Every cycle = work + break (including the last one)
   const actualTotal = (cycles - 1) * (workMin + breakMin) + (lastWork + breakMin);
 
+  // No break after the final session
+  const actualTotal = (cycles - 1) * (workMin + breakMin) + lastWork;
   let text;
-  if (lastWork !== workMin) {
-    // Last session is slightly longer due to leftover time
-    text = `${cycles - 1} × ${workMin}min work + ${breakMin}min break, `
-         + `then ${lastWork}min work + ${breakMin}min break`
-         + ` = ${actualTotal} min`;
+  if (cycles === 1) {
+    text = `1 session of ${lastWork}min (no break at end) = ${actualTotal} min`;
+  } else if (lastWork !== workMin) {
+    text = `${cycles - 1} × ${workMin}min + ${breakMin}min break, then ${lastWork}min = ${actualTotal} min`;
   } else {
-    text = `${cycles} × ${workMin}min work + ${breakMin}min break = ${actualTotal} min`;
+    text = `${cycles - 1} × ${workMin}min + ${breakMin}min break, then ${lastWork}min = ${actualTotal} min`;
   }
 
   els.goalPreview.textContent = text;

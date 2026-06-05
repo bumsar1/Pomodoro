@@ -178,30 +178,41 @@ async function startBreak(isLong = false) {
   const newCyclesLeft = Math.max(0, (state.goalCyclesLeft ?? 0) - 1);
   const goalJustDone  = state.goalActive && newCyclesLeft === 0;
 
+  // Always save stats first
   await setState({
-    phase: isLong ? "longbreak" : "break",
-    endTime, round: newRound, focusToday, focusHistory,
+    round: newRound, focusToday, focusHistory,
     goalCyclesLeft: newCyclesLeft,
     ...(goalJustDone ? { goalActive: false } : {}),
   });
+
+  // Goal complete — stop immediately, no final break
+  if (goalJustDone) {
+    await setState({ phase: "idle", endTime: null });
+    await updateBlockingRules(state.blacklist, state.whitelist, false, settings.blockMode);
+    await chrome.alarms.clearAll();
+    chrome.action.setBadgeText({ text: "" });
+    chrome.notifications.create({
+      type: "basic", iconUrl: "icons/icon48.png",
+      title: "🍅 Goal complete — great work!",
+      message: `All ${state.goalCycles} sessions done. You're free!`,
+    });
+    return;
+  }
+
+  // Regular break
+  await setState({ phase: isLong ? "longbreak" : "break", endTime });
   await updateBlockingRules(state.blacklist, state.whitelist, false, settings.blockMode);
   await chrome.alarms.clearAll();
   await chrome.alarms.create("pomodoroTick", { periodInMinutes: 1 / 60 });
   await chrome.alarms.create("phaseEnd",     { delayInMinutes: breakMin });
   updateBadge(isLong ? "longbreak" : "break", endTime);
 
-  const title = goalJustDone
-    ? "Goal complete — great work!"
-    : isLong ? "Long break — you earned it!" : "Break time!";
-  const msg = goalJustDone
-    ? `You finished all ${state.goalCycles} sessions. Enjoy the rest!`
-    : isLong
-      ? `Great work — ${settings.longBreakMin} minutes to recharge.`
-      : `Nice session! ${settings.breakMin} minutes to relax.`;
-
   chrome.notifications.create({
     type: "basic", iconUrl: "icons/icon48.png",
-    title: `🍅 ${title}`, message: msg,
+    title: `🍅 ${isLong ? "Long break — you earned it!" : "Break time!"}`,
+    message: isLong
+      ? `Great work — ${settings.longBreakMin} minutes to recharge.`
+      : `Nice session! ${settings.breakMin} minutes to relax.`,
   });
 }
 
@@ -313,10 +324,11 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           await setState({ goalActive: false, goalCycles: 0, goalCyclesLeft: 0, goalLastWorkMin: 0 });
         } else {
           const { totalMin, workMin, breakMin } = msg;
-          const cycleTime  = workMin + breakMin;
-          const cycles     = Math.max(1, Math.floor(totalMin / cycleTime));
-          const leftover   = totalMin - cycles * cycleTime;
-          const lastWorkMin = workMin + (leftover >= 1 ? leftover : 0);
+          // No break after the last session:
+          // (cycles - 1) × (work + break) + lastWork = total
+          const cycleTime   = workMin + breakMin;
+          const cycles      = Math.max(1, Math.floor((totalMin - workMin) / cycleTime) + 1);
+          const lastWorkMin = totalMin - (cycles - 1) * cycleTime;
           await setState({
             goalActive: true,
             goalCycles: cycles,
