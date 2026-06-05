@@ -103,6 +103,32 @@
     .btn-stop  { background: #252540; color: #777; border: 1px solid #333; }
     .btn-stop.counting { color: #f39c12; border-color: #f39c12; }
 
+    /* ── Goal section ── */
+    .goal-section { padding: 0 18px 12px; }
+    .goal-row { display: flex; align-items: center; justify-content: space-between; }
+    .goal-lbl { font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: 1px; }
+    .goal-inputs { display: flex; align-items: center; gap: 6px; }
+    .goal-inputs input[type="number"] { width: 52px; padding: 4px 8px; background: #252540; border: 1px solid #333; border-radius: 5px; color: #eee; font-size: 12px; text-align: center; outline: none; }
+    .goal-inputs input[type="number"]:focus { border-color: #5050a0; }
+    .goal-unit { font-size: 11px; color: #444; }
+    .goal-preview { margin-top: 5px; font-size: 11px; color: #5050a0; padding: 4px 8px; background: #1e1e38; border-radius: 5px; display: none; }
+    .goal-preview.visible { display: block; }
+
+    .goal-progress { display: none; padding: 0 18px 10px; }
+    .goal-progress.visible { display: block; }
+    .goal-progress-text { font-size: 11px; color: #888; margin-bottom: 4px; display: flex; justify-content: space-between; }
+    .goal-bar-bg { height: 3px; background: #252540; border-radius: 2px; }
+    .goal-bar-fill { height: 3px; background: #e74c3c; border-radius: 2px; transition: width 0.5s ease; width: 0%; }
+
+    /* ── Mode pills ── */
+    .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    .mode-pills { display: flex; gap: 3px; }
+    .mode-pill { padding: 3px 9px; border-radius: 12px; font-size: 10px; font-weight: 600; border: 1px solid #333; background: none; color: #444; cursor: pointer; transition: all 0.15s; }
+    .mode-pill.active { background: #353578; color: #a0a0e0; border-color: #4040a0; }
+    .mode-pill:hover:not(.active) { border-color: #555; color: #888; }
+    .mode-desc { font-size: 11px; color: #333; margin-bottom: 8px; line-height: 1.4; display: none; }
+    .mode-desc.visible { display: block; }
+
     @keyframes shake {
       0%, 100% { transform: translateX(0); }
       25% { transform: translateX(-4px); }
@@ -296,6 +322,31 @@
 
   <div class="phase-badge phase-idle" id="phaseBadge">IDLE</div>
 
+  <!-- Goal setup (visible when idle) -->
+  <div class="goal-section" id="goalSection">
+    <div class="goal-row">
+      <span class="goal-lbl">Session goal</span>
+      <div class="goal-inputs">
+        <input type="number" id="goalMinutes" min="15" max="480" value="60" />
+        <span class="goal-unit">min total</span>
+        <label class="toggle" style="margin-left:4px">
+          <input type="checkbox" id="goalEnabled" />
+          <span class="slider"></span>
+        </label>
+      </div>
+    </div>
+    <div class="goal-preview" id="goalPreview"></div>
+  </div>
+
+  <!-- Goal progress (visible during session) -->
+  <div class="goal-progress" id="goalProgress">
+    <div class="goal-progress-text">
+      <span id="goalProgressText">Session 1 of 4</span>
+      <span id="goalProgressMins"></span>
+    </div>
+    <div class="goal-bar-bg"><div class="goal-bar-fill" id="goalBarFill"></div></div>
+  </div>
+
   <div class="controls" id="controlsRow">
     <button class="btn btn-start" id="btnStart">▶ Focus</button>
     <button class="btn btn-break" id="btnBreak" disabled>☕ Break</button>
@@ -337,19 +388,31 @@
   <div class="divider"></div>
 
   <div class="section">
-    <div class="section-title">Blocked sites</div>
-    <div class="add-row">
-      <input id="siteInput" type="text" placeholder="youtube.com" />
-      <button id="addSiteBtn">+</button>
+    <div class="section-header">
+      <span class="section-title">Blocking mode</span>
+      <div class="mode-pills">
+        <button class="mode-pill active" id="modeBlacklistBtn">Block listed</button>
+        <button class="mode-pill"        id="modeAllowlistBtn">Allow only</button>
+      </div>
     </div>
-    <div class="blacklist" id="blacklist"></div>
+    <div class="mode-desc" id="modeBlacklistDesc">Listed sites are blocked. Everything else is allowed.</div>
+    <div class="mode-desc" id="modeAllowlistDesc">Only listed sites are allowed. Everything else is blocked.</div>
+
+    <!-- Blacklist panel -->
+    <div id="blacklistPanel">
+      <div class="add-row">
+        <input id="siteInput" type="text" placeholder="youtube.com" />
+        <button id="addSiteBtn">+</button>
+      </div>
+      <div class="blacklist" id="blacklist"></div>
+    </div>
   </div>
 
   <div class="divider"></div>
 
   <div class="section">
-    <div class="section-title" style="color:#2ecc71;opacity:0.7">Always allowed</div>
-    <div style="font-size:11px;color:#2a2a4a;margin-bottom:8px;line-height:1.4">
+    <div class="section-title" id="whitelistTitle" style="color:#2ecc71;opacity:0.7">Always allowed</div>
+    <div style="font-size:11px;color:#2a2a4a;margin-bottom:8px;line-height:1.4" id="whitelistHint">
       Exceptions — overrides blocked sites (e.g. <code style="color:#333">music.youtube.com</code>).
     </div>
     <div class="add-row">

@@ -61,10 +61,27 @@ const els = {
   volumeRow:         document.getElementById("volumeRow"),
   saveSettings:      document.getElementById("saveSettings"),
   savedMsg:          document.getElementById("savedMsg"),
-  hmapGrid:          document.getElementById("hmapGrid"),
-  heatmapToggle:     document.getElementById("heatmapToggle"),
-  heatmapBody:       document.getElementById("heatmapBody"),
-  dots:              [0, 1, 2, 3].map((i) => document.getElementById(`d${i}`)),
+  hmapGrid:           document.getElementById("hmapGrid"),
+  heatmapToggle:      document.getElementById("heatmapToggle"),
+  heatmapBody:        document.getElementById("heatmapBody"),
+  dots:               [0, 1, 2, 3].map((i) => document.getElementById(`d${i}`)),
+  // Goal
+  goalSection:        document.getElementById("goalSection"),
+  goalEnabled:        document.getElementById("goalEnabled"),
+  goalMinutes:        document.getElementById("goalMinutes"),
+  goalPreview:        document.getElementById("goalPreview"),
+  goalProgress:       document.getElementById("goalProgress"),
+  goalProgressText:   document.getElementById("goalProgressText"),
+  goalProgressMins:   document.getElementById("goalProgressMins"),
+  goalBarFill:        document.getElementById("goalBarFill"),
+  // Mode
+  modeBlacklistBtn:   document.getElementById("modeBlacklistBtn"),
+  modeAllowlistBtn:   document.getElementById("modeAllowlistBtn"),
+  modeBlacklistDesc:  document.getElementById("modeBlacklistDesc"),
+  modeAllowlistDesc:  document.getElementById("modeAllowlistDesc"),
+  blacklistPanel:     document.getElementById("blacklistPanel"),
+  whitelistTitle:     document.getElementById("whitelistTitle"),
+  whitelistHint:      document.getElementById("whitelistHint"),
 };
 
 // ── State ───────────────────────────────────────────────────────────────────
@@ -328,6 +345,7 @@ function renderState(state) {
 
   setRing(fraction, phase);
   updateDots(round ?? 0, s.longBreakAfter);
+  renderGoalProgress(state, s);
 
   // Focus time stat
   const fm = focusToday ?? 0;
@@ -492,18 +510,99 @@ function renderHeatmap(focusHistory) {
   }
 }
 
+// ── Goal mode ─────────────────────────────────────────────────────────────────
+
+function calculateGoal(totalMin, workMin, breakMin) {
+  const cycleTime  = workMin + breakMin;
+  const cycles     = Math.max(1, Math.floor(totalMin / cycleTime));
+  const leftover   = totalMin - cycles * cycleTime;
+  const lastWork   = workMin + (leftover >= 1 ? leftover : 0);
+  return { cycles, lastWork, cycleTime };
+}
+
+function updateGoalPreview() {
+  if (!els.goalEnabled.checked) {
+    els.goalPreview.classList.remove("visible");
+    return;
+  }
+  const totalMin = parseInt(els.goalMinutes.value, 10) || 60;
+  const workMin  = parseInt(els.setWork.value,     10) || 25;
+  const breakMin = parseInt(els.setBreak.value,    10) || 5;
+  const { cycles, lastWork } = calculateGoal(totalMin, workMin, breakMin);
+  const regular = cycles > 1 ? `${cycles - 1} × ${workMin}min + ${breakMin}min break, ` : "";
+  const last    = lastWork !== workMin ? `last session ${lastWork}min` : `last ${workMin}min`;
+  els.goalPreview.textContent = `${regular}${last} = ${totalMin} min total`;
+  els.goalPreview.classList.add("visible");
+}
+
+function renderGoalProgress(state, settings) {
+  const active = state.goalActive || (state.goalCycles > 0 && state.goalCyclesLeft > 0);
+  const inSession = state.phase !== "idle";
+
+  els.goalSection.style.display   = inSession ? "none" : "block";
+  els.goalProgress.classList.toggle("visible", active && inSession);
+
+  if (active && inSession) {
+    const done  = (state.goalCycles ?? 0) - (state.goalCyclesLeft ?? 0);
+    const total = state.goalCycles ?? 0;
+    const pct   = total > 0 ? (done / total) * 100 : 0;
+    els.goalProgressText.textContent = `Session ${done + 1} of ${total}`;
+    els.goalProgressMins.textContent  = `${(settings?.workMin ?? 25) * total} min goal`;
+    els.goalBarFill.style.width       = `${pct}%`;
+  }
+}
+
+// ── Block mode ────────────────────────────────────────────────────────────────
+
+let currentBlockMode = "blacklist";
+
+function applyBlockMode(mode) {
+  currentBlockMode = mode;
+  const isAllow = mode === "allowlist";
+
+  els.modeBlacklistBtn.classList.toggle("active", !isAllow);
+  els.modeAllowlistBtn.classList.toggle("active",  isAllow);
+  els.modeBlacklistDesc.classList.toggle("visible", !isAllow);
+  els.modeAllowlistDesc.classList.toggle("visible",  isAllow);
+
+  // In allowlist mode, hide the blacklist panel (it's unused)
+  els.blacklistPanel.style.display = isAllow ? "none" : "block";
+
+  // Rename "Always allowed" → "Allowed sites" in allowlist mode
+  els.whitelistTitle.textContent = isAllow ? "Allowed sites" : "Always allowed";
+  els.whitelistTitle.style.color = isAllow ? "#2ecc71" : "#2ecc71";
+  els.whitelistHint.textContent  = isAllow
+    ? "Only these sites are accessible during a session. Everything else is blocked."
+    : "Exceptions — overrides blocked sites (e.g. music.youtube.com).";
+}
+
 // ── Settings ─────────────────────────────────────────────────────────────────
 
 function loadSettingsIntoForm(settings) {
-  els.setWork.value           = settings.workMin       ?? 25;
-  els.setBreak.value          = settings.breakMin      ?? 5;
-  els.setLongBreak.value      = settings.longBreakMin  ?? 15;
+  els.setWork.value           = settings.workMin        ?? 25;
+  els.setBreak.value          = settings.breakMin       ?? 5;
+  els.setLongBreak.value      = settings.longBreakMin   ?? 15;
   els.setLongBreakAfter.value = settings.longBreakAfter ?? 4;
-  els.setAutoStart.checked    = settings.autoStart     ?? false;
-  els.setStrictMode.checked   = settings.strictMode    ?? false;
-  els.setSoundType.value      = settings.soundType     ?? "off";
-  els.setSoundVolume.value    = settings.soundVolume   ?? 0.4;
+  els.setAutoStart.checked    = settings.autoStart      ?? false;
+  els.setStrictMode.checked   = settings.strictMode     ?? false;
+  els.setSoundType.value      = settings.soundType      ?? "off";
+  els.setSoundVolume.value    = settings.soundVolume    ?? 0.4;
   els.volumeRow.style.display = (settings.soundType && settings.soundType !== "off") ? "flex" : "none";
+  applyBlockMode(settings.blockMode ?? "blacklist");
+}
+
+function buildCurrentSettings() {
+  return {
+    workMin:        Math.max(1, parseInt(els.setWork.value, 10)           || 25),
+    breakMin:       Math.max(1, parseInt(els.setBreak.value, 10)          || 5),
+    longBreakMin:   Math.max(1, parseInt(els.setLongBreak.value, 10)      || 15),
+    longBreakAfter: Math.max(2, parseInt(els.setLongBreakAfter.value, 10) || 4),
+    autoStart:      els.setAutoStart.checked,
+    strictMode:     els.setStrictMode.checked,
+    soundType:      els.setSoundType.value,
+    soundVolume:    parseFloat(els.setSoundVolume.value),
+    blockMode:      currentBlockMode,
+  };
 }
 
 // ── Today's session counter ───────────────────────────────────────────────────
@@ -548,6 +647,17 @@ function stopTick() {
 els.btnStart.addEventListener("click", async () => {
   const task = els.taskInput.value.trim();
   if (task) await sendMsg({ type: "SET_TASK", task });
+
+  // Configure goal before starting
+  if (els.goalEnabled.checked) {
+    const totalMin = parseInt(els.goalMinutes.value, 10) || 60;
+    const workMin  = parseInt(els.setWork.value, 10)     || 25;
+    const breakMin = parseInt(els.setBreak.value, 10)    || 5;
+    await sendMsg({ type: "SET_GOAL", active: true, totalMin, workMin, breakMin });
+  } else {
+    await sendMsg({ type: "SET_GOAL", active: false });
+  }
+
   await sendMsg({ type: "START_WORK" });
   await incrementTodaySessions();
   const state = await sendMsg({ type: "GET_STATE" });
@@ -657,6 +767,7 @@ els.saveSettings.addEventListener("click", async () => {
     strictMode:     els.setStrictMode.checked,
     soundType:      els.setSoundType.value,
     soundVolume:    parseFloat(els.setSoundVolume.value),
+    blockMode:      currentBlockMode,
   };
   await sendMsg({ type: "UPDATE_SETTINGS", settings });
 
@@ -670,6 +781,23 @@ els.saveSettings.addEventListener("click", async () => {
 els.heatmapToggle.addEventListener("click", () => {
   els.heatmapToggle.classList.toggle("open");
   els.heatmapBody.classList.toggle("open");
+});
+
+// Goal listeners
+els.goalEnabled.addEventListener("change", updateGoalPreview);
+els.goalMinutes.addEventListener("input",  updateGoalPreview);
+// Also update preview when work/break durations change in settings
+els.setWork.addEventListener("input",  updateGoalPreview);
+els.setBreak.addEventListener("input", updateGoalPreview);
+
+// Mode pill listeners
+els.modeBlacklistBtn.addEventListener("click", () => {
+  applyBlockMode("blacklist");
+  sendMsg({ type: "UPDATE_SETTINGS", settings: { ...buildCurrentSettings(), blockMode: "blacklist" } });
+});
+els.modeAllowlistBtn.addEventListener("click", () => {
+  applyBlockMode("allowlist");
+  sendMsg({ type: "UPDATE_SETTINGS", settings: { ...buildCurrentSettings(), blockMode: "allowlist" } });
 });
 
 // ── Init ──────────────────────────────────────────────────────────────────────
