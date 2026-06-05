@@ -49,13 +49,17 @@ function connectNativeHost() {
   try {
     nativePort = chrome.runtime.connectNative(NATIVE_HOST);
     nativePort.onDisconnect.addListener(() => {
-      // Host not installed, or it exited — clear so we retry next time
+      // Host not installed, or it exited — log why, then clear so we retry
+      const err = chrome.runtime.lastError;
+      console.warn("[native] disconnected:", err ? err.message : "(no error)");
       nativePort = null;
     });
     nativePort.onMessage.addListener((msg) => {
-      console.log("Native host:", msg);
+      console.log("[native] host says:", msg);
     });
+    console.log("[native] connected to", NATIVE_HOST);
   } catch (e) {
+    console.warn("[native] connect failed:", e);
     nativePort = null;
   }
   return nativePort;

@@ -52,33 +52,32 @@ def send_message(obj):
 
 
 # ── App control ───────────────────────────────────────────────────────────────
+#
+# We use `pkill` rather than AppleScript/System Events because:
+#   - it needs NO Automation permission (no macOS prompt, no timeouts)
+#   - it never accidentally *launches* an app that isn't running
+#   - it's fast and reliable
 
-def running_apps():
-    """Return the list of visible (non-background) app names currently running."""
+def is_running(name):
+    """True if a process with this exact name is running."""
     try:
-        out = subprocess.check_output(
-            ["osascript", "-e",
-             'tell application "System Events" to get name of '
-             '(every process whose background only is false)'],
-            text=True, stderr=subprocess.DEVNULL, timeout=5,
-        )
-        return [a.strip() for a in out.split(",")]
+        r = subprocess.run(["pgrep", "-x", name], capture_output=True, timeout=3)
+        return r.returncode == 0
     except Exception as e:
-        log(f"running_apps error: {e}")
-        return []
+        log(f"pgrep {name} error: {e}")
+        return False
 
 
 def quit_app(name):
-    """Gracefully tell an app to quit (only call for apps known to be running)."""
+    """Force-quit an app by exact process name. Returns True if it was running."""
     try:
-        subprocess.run(
-            ["osascript", "-e", f'tell application "{name}" to quit'],
-            capture_output=True, timeout=5,
-        )
-        log(f"quit {name}")
-        return True
+        r = subprocess.run(["pkill", "-x", name], capture_output=True, timeout=3)
+        if r.returncode == 0:
+            log(f"killed {name}")
+            return True
+        return False
     except Exception as e:
-        log(f"quit {name} error: {e}")
+        log(f"kill {name} error: {e}")
         return False
 
 
@@ -89,10 +88,9 @@ def enforce():
         apps  = list(state["apps"])
     if phase != "work" or not apps:
         return []
-    running = running_apps()
     killed = []
     for app in apps:
-        if app in running and quit_app(app):
+        if quit_app(app):
             killed.append(app)
     return killed
 
