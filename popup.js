@@ -26,6 +26,7 @@ const els = {
   btnStart:          document.getElementById("btnStart"),
   btnBreak:          document.getElementById("btnBreak"),
   btnStop:           document.getElementById("btnStop"),
+  btnFinish:         document.getElementById("btnFinish"),
   controlsRow:       document.getElementById("controlsRow"),
   strictBadge:       document.getElementById("strictBadge"),
   taskInput:         document.getElementById("taskInput"),
@@ -725,6 +726,20 @@ els.cancelReason.addEventListener("click", () => {
 els.breakNextBtn.addEventListener("click", () => {
   currentSuggestionIdx = (currentSuggestionIdx + 1) % BREAK_SUGGESTIONS.length;
   showSuggestion(currentSuggestionIdx);
+});
+
+els.btnFinish.addEventListener("click", async () => {
+  await sendMsg({ type: "FINISH" });
+  stopSound();
+  stopTick();
+  strictClicks = 0;
+  hideReasonForm();
+  els.reasonInput.value = "";
+  els.taskInput.value   = "";
+  els.goalEnabled.checked = false;
+  updateGoalPreview();
+  const state = await sendMsg({ type: "GET_STATE" });
+  renderState({ ...state, phase: "idle", endTime: null, round: 0, goalActive: false });
 });
 
 els.addSiteBtn.addEventListener("click",  addSite);

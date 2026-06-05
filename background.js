@@ -348,6 +348,19 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         await updateBlockingRules(state.blacklist, msg.whitelist, state.phase === "work", settings.blockMode);
         break;
       }
+      case "FINISH": {
+        // Stop session, reset round counter and goal — clean slate
+        const state = await getState();
+        await setState({
+          phase: "idle", endTime: null,
+          round: 0, goalActive: false, goalCycles: 0,
+          goalCyclesLeft: 0, goalLastWorkMin: 0, currentTask: "",
+        });
+        await updateBlockingRules(state.blacklist, state.whitelist, false, (await getSettings()).blockMode);
+        await chrome.alarms.clearAll();
+        chrome.action.setBadgeText({ text: "" });
+        break;
+      }
       case "UPDATE_SETTINGS": {
         const state = await getState();
         await setState({ settings: msg.settings });
