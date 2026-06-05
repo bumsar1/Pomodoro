@@ -103,6 +103,17 @@
     .btn-stop  { background: #252540; color: #777; border: 1px solid #333; }
     .btn-stop.counting { color: #f39c12; border-color: #f39c12; }
 
+    /* ── Duration pill ── */
+    .duration-pill {
+      font-size: 11px;
+      color: #444;
+      background: #20203a;
+      border-radius: 12px;
+      padding: 3px 10px;
+      cursor: pointer;
+    }
+    .duration-pill:hover { color: #777; }
+
     /* ── Goal section ── */
     .goal-section { padding: 0 18px 12px; }
     .goal-row { display: flex; align-items: center; justify-content: space-between; }
@@ -226,7 +237,12 @@
     .site-item .remove:disabled { opacity: 0.2; cursor: not-allowed; }
 
     /* ── Settings panel ── */
-    .settings-panel { display: none; padding: 12px 18px 14px; border-top: 1px solid #252540; }
+    .settings-panel {
+      display: none;
+      padding: 12px 18px 14px;
+      border-bottom: 1px solid #252540;
+      background: #1e1e36;
+    }
     .settings-panel.open { display: block; }
     .setting-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
     .setting-row:last-child { margin-bottom: 0; }
@@ -307,6 +323,72 @@
     <button class="settings-toggle" id="settingsToggle" title="Settings">⚙</button>
   </div>
 
+  <!-- Settings panel — lives at the top so it opens without scrolling -->
+  <div class="settings-panel" id="settingsPanel">
+    <div class="section-title">Timer</div>
+    <div class="setting-row">
+      <span class="setting-lbl">Focus</span>
+      <div style="display:flex;align-items:center;gap:5px">
+        <input type="number" id="setWork" min="1" max="120" value="25" />
+        <span style="font-size:11px;color:#444">min</span>
+      </div>
+    </div>
+    <div class="setting-row">
+      <span class="setting-lbl">Short break</span>
+      <div style="display:flex;align-items:center;gap:5px">
+        <input type="number" id="setBreak" min="1" max="60" value="5" />
+        <span style="font-size:11px;color:#444">min</span>
+      </div>
+    </div>
+    <div class="setting-row">
+      <span class="setting-lbl">Long break</span>
+      <div style="display:flex;align-items:center;gap:5px">
+        <input type="number" id="setLongBreak" min="1" max="60" value="15" />
+        <span style="font-size:11px;color:#444">min</span>
+      </div>
+    </div>
+    <div class="setting-row">
+      <span class="setting-lbl">Long break every</span>
+      <div style="display:flex;align-items:center;gap:5px">
+        <input type="number" id="setLongBreakAfter" min="2" max="10" value="4" />
+        <span style="font-size:11px;color:#444">sessions</span>
+      </div>
+    </div>
+    <div class="setting-row">
+      <span class="setting-lbl">Auto-start next</span>
+      <label class="toggle"><input type="checkbox" id="setAutoStart" /><span class="slider"></span></label>
+    </div>
+    <div class="settings-sep"></div>
+    <div class="section-title" style="margin-bottom:8px">Focus</div>
+    <div class="setting-row">
+      <span class="setting-lbl">Strict mode</span>
+      <label class="toggle"><input type="checkbox" id="setStrictMode" /><span class="slider"></span></label>
+    </div>
+    <div style="font-size:10px;color:#333;margin-bottom:10px;line-height:1.4">
+      Stop requires 10 clicks + a reason. Can't modify blocked sites during work.
+    </div>
+    <div class="settings-sep"></div>
+    <div class="section-title" style="margin-bottom:8px">Ambient sound</div>
+    <div class="setting-row">
+      <span class="setting-lbl">Sound</span>
+      <select class="sound-select" id="setSoundType">
+        <option value="off">Off</option>
+        <option value="white">White noise</option>
+        <option value="brown">Brown noise</option>
+        <option value="rain">Rain</option>
+      </select>
+    </div>
+    <div class="setting-row" id="volumeRow" style="display:none">
+      <span class="setting-lbl">Volume</span>
+      <input type="range" id="setSoundVolume" min="0" max="1" step="0.05" value="0.4" />
+    </div>
+    <div style="font-size:10px;color:#333;margin-bottom:2px;line-height:1.4">
+      Plays while this popup is open.
+    </div>
+    <button class="save-settings" id="saveSettings">Save settings</button>
+    <div class="saved-msg" id="savedMsg"></div>
+  </div>
+
   <div class="task-wrap">
     <input  class="task-input"   id="taskInput"   type="text" placeholder="What are you working on?" maxlength="60" />
     <div    class="task-display" id="taskDisplay">
@@ -336,6 +418,10 @@
   </div>
 
   <div class="phase-badge phase-idle" id="phaseBadge">IDLE</div>
+
+  <div style="text-align:center;padding:0 0 6px">
+    <span class="duration-pill" id="durationPill">25 min · 5 min break</span>
+  </div>
 
   <!-- Goal setup (visible when idle) -->
   <div class="goal-section" id="goalSection">
@@ -439,78 +525,6 @@
       <button id="addWhiteBtn" style="background:#1a4a2a;color:#2ecc71">+</button>
     </div>
     <div class="blacklist" id="whitelist"></div>
-  </div>
-
-  <!-- Settings panel -->
-  <div class="settings-panel" id="settingsPanel">
-    <div class="section-title">Timer</div>
-
-    <div class="setting-row">
-      <span class="setting-lbl">Focus</span>
-      <div style="display:flex;align-items:center;gap:5px">
-        <input type="number" id="setWork" min="1" max="120" value="25" />
-        <span style="font-size:11px;color:#444">min</span>
-      </div>
-    </div>
-    <div class="setting-row">
-      <span class="setting-lbl">Short break</span>
-      <div style="display:flex;align-items:center;gap:5px">
-        <input type="number" id="setBreak" min="1" max="60" value="5" />
-        <span style="font-size:11px;color:#444">min</span>
-      </div>
-    </div>
-    <div class="setting-row">
-      <span class="setting-lbl">Long break</span>
-      <div style="display:flex;align-items:center;gap:5px">
-        <input type="number" id="setLongBreak" min="1" max="60" value="15" />
-        <span style="font-size:11px;color:#444">min</span>
-      </div>
-    </div>
-    <div class="setting-row">
-      <span class="setting-lbl">Long break every</span>
-      <div style="display:flex;align-items:center;gap:5px">
-        <input type="number" id="setLongBreakAfter" min="2" max="10" value="4" />
-        <span style="font-size:11px;color:#444">sessions</span>
-      </div>
-    </div>
-    <div class="setting-row">
-      <span class="setting-lbl">Auto-start next</span>
-      <label class="toggle"><input type="checkbox" id="setAutoStart" /><span class="slider"></span></label>
-    </div>
-
-    <div class="settings-sep"></div>
-    <div class="section-title" style="margin-bottom:8px">Focus</div>
-
-    <div class="setting-row">
-      <span class="setting-lbl">Strict mode</span>
-      <label class="toggle"><input type="checkbox" id="setStrictMode" /><span class="slider"></span></label>
-    </div>
-    <div style="font-size:10px;color:#333;margin-bottom:10px;line-height:1.4">
-      Stop requires 10 clicks + a reason. Can't modify blocked sites during work.
-    </div>
-
-    <div class="settings-sep"></div>
-    <div class="section-title" style="margin-bottom:8px">Ambient sound</div>
-
-    <div class="setting-row">
-      <span class="setting-lbl">Sound</span>
-      <select class="sound-select" id="setSoundType">
-        <option value="off">Off</option>
-        <option value="white">White noise</option>
-        <option value="brown">Brown noise</option>
-        <option value="rain">Rain</option>
-      </select>
-    </div>
-    <div class="setting-row" id="volumeRow" style="display:none">
-      <span class="setting-lbl">Volume</span>
-      <input type="range" id="setSoundVolume" min="0" max="1" step="0.05" value="0.4" />
-    </div>
-    <div style="font-size:10px;color:#333;margin-bottom:2px;line-height:1.4">
-      Plays while this popup is open.
-    </div>
-
-    <button class="save-settings" id="saveSettings">Save settings</button>
-    <div class="saved-msg" id="savedMsg"></div>
   </div>
 
   <!-- Heatmap panel -->

@@ -62,6 +62,7 @@ const els = {
   volumeRow:         document.getElementById("volumeRow"),
   saveSettings:      document.getElementById("saveSettings"),
   savedMsg:          document.getElementById("savedMsg"),
+  durationPill:      document.getElementById("durationPill"),
   hmapGrid:           document.getElementById("hmapGrid"),
   heatmapToggle:      document.getElementById("heatmapToggle"),
   heatmapBody:        document.getElementById("heatmapBody"),
@@ -593,6 +594,13 @@ function applyBlockMode(mode) {
 
 // ── Settings ─────────────────────────────────────────────────────────────────
 
+function updateDurationPill(settings) {
+  const s = settings ?? {};
+  const w = s.workMin  ?? 25;
+  const b = s.breakMin ?? 5;
+  els.durationPill.textContent = `${w} min · ${b} min break`;
+}
+
 function loadSettingsIntoForm(settings) {
   els.setWork.value           = settings.workMin        ?? 25;
   els.setBreak.value          = settings.breakMin       ?? 5;
@@ -604,6 +612,7 @@ function loadSettingsIntoForm(settings) {
   els.setSoundVolume.value    = settings.soundVolume    ?? 0.4;
   els.volumeRow.style.display = (settings.soundType && settings.soundType !== "off") ? "flex" : "none";
   applyBlockMode(settings.blockMode ?? "blacklist");
+  updateDurationPill(settings);
 }
 
 function buildCurrentSettings() {
@@ -771,11 +780,7 @@ els.whitelist.addEventListener("click", (e) => {
 });
 
 els.settingsToggle.addEventListener("click", () => {
-  const opening = !els.settingsPanel.classList.contains("open");
   els.settingsPanel.classList.toggle("open");
-  if (opening) {
-    setTimeout(() => els.settingsPanel.scrollIntoView({ behavior: "smooth", block: "start" }), 30);
-  }
 });
 
 els.setSoundType.addEventListener("change", () => {
@@ -803,6 +808,8 @@ els.saveSettings.addEventListener("click", async () => {
   const state = await sendMsg({ type: "GET_STATE" });
   if (state.phase === "idle") els.timerDisplay.textContent = formatTime(settings.workMin * 60);
 
+  updateDurationPill(settings);
+  updateGoalPreview();
   els.savedMsg.textContent = "Saved ✓";
   setTimeout(() => { els.savedMsg.textContent = ""; }, 1800);
 });
@@ -829,6 +836,11 @@ els.modeAllowlistBtn.addEventListener("click", () => {
   sendMsg({ type: "UPDATE_SETTINGS", settings: { ...buildCurrentSettings(), blockMode: "allowlist" } });
 });
 
+// Click pill to open settings
+document.getElementById("durationPill").addEventListener("click", () => {
+  els.settingsPanel.classList.add("open");
+});
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 (async () => {
@@ -843,6 +855,12 @@ els.modeAllowlistBtn.addEventListener("click", () => {
 
   // Restore task input value
   if (state.currentTask) els.taskInput.value = state.currentTask;
+
+  // Restore goal toggle if a goal was active
+  if (state.goalActive && state.goalCycles > 0) {
+    els.goalEnabled.checked = true;
+    updateGoalPreview();
+  }
 
   // Restore sound if session is active
   if (state.phase === "work" && state.settings?.soundType && state.settings.soundType !== "off") {
