@@ -527,6 +527,21 @@
     <div class="blacklist" id="whitelist"></div>
   </div>
 
+  <div class="divider"></div>
+
+  <div class="section">
+    <div class="section-title" style="color:#9b59b6;opacity:0.8">Blocked apps (Mac)</div>
+    <div style="font-size:11px;color:#2a2a4a;margin-bottom:8px;line-height:1.4">
+      Quits these macOS apps during focus. Needs the native helper installed
+      (see <code style="color:#333">native-host/install.sh</code>). Use the exact app name, e.g. <code style="color:#333">Discord</code>.
+    </div>
+    <div class="add-row">
+      <input id="appInput" type="text" placeholder="Discord" />
+      <button id="addAppBtn" style="background:#3a1a4a;color:#9b59b6">+</button>
+    </div>
+    <div class="blacklist" id="appslist"></div>
+  </div>
+
   <!-- Heatmap panel -->
   <div class="heatmap-panel">
     <button class="heatmap-toggle" id="heatmapToggle">

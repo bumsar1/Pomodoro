@@ -17,7 +17,7 @@ async function getSettings() {
 
 async function getState() {
   const data = await chrome.storage.local.get([
-    "phase", "endTime", "blacklist", "whitelist",
+    "phase", "endTime", "blacklist", "whitelist", "blockedApps",
     "round", "focusToday", "lastDate", "currentTask", "focusHistory",
     "goalActive", "goalCycles", "goalCyclesLeft", "goalLastWorkMin",
   ]);
@@ -26,6 +26,7 @@ async function getState() {
     endTime:         data.endTime         ?? null,
     blacklist:       data.blacklist       ?? [],
     whitelist:       data.whitelist       ?? [],
+    blockedApps:     data.blockedApps     ?? [],
     round:           data.round           ?? 0,
     focusToday:      data.focusToday      ?? 0,
     lastDate:        data.lastDate        ?? null,
@@ -36,6 +37,39 @@ async function getState() {
     goalCyclesLeft:  data.goalCyclesLeft  ?? 0,
     goalLastWorkMin: data.goalLastWorkMin ?? 0,
   };
+}
+
+// ── Native messaging bridge (macOS app blocker) ───────────────────────────────
+
+const NATIVE_HOST = "com.pomodoro.blocker";
+let nativePort = null;
+
+function connectNativeHost() {
+  if (nativePort) return nativePort;
+  try {
+    nativePort = chrome.runtime.connectNative(NATIVE_HOST);
+    nativePort.onDisconnect.addListener(() => {
+      // Host not installed, or it exited — clear so we retry next time
+      nativePort = null;
+    });
+    nativePort.onMessage.addListener((msg) => {
+      console.log("Native host:", msg);
+    });
+  } catch (e) {
+    nativePort = null;
+  }
+  return nativePort;
+}
+
+async function sendToNative(phase) {
+  const state = await getState();
+  const port  = connectNativeHost();
+  if (!port) return;
+  try {
+    port.postMessage({ type: "SESSION", phase, apps: state.blockedApps ?? [] });
+  } catch (e) {
+    nativePort = null;
+  }
 }
 
 async function setState(updates) {
@@ -164,6 +198,7 @@ async function startWork() {
   await chrome.alarms.create("phaseEnd",     { delayInMinutes: workMin });
   await chrome.alarms.create("minutePing",   { periodInMinutes: 5 });
   updateBadge("work", endTime);
+  sendToNative("work");
 }
 
 async function startBreak(isLong = false) {
@@ -206,6 +241,7 @@ async function startBreak(isLong = false) {
   await chrome.alarms.create("pomodoroTick", { periodInMinutes: 1 / 60 });
   await chrome.alarms.create("phaseEnd",     { delayInMinutes: breakMin });
   updateBadge(isLong ? "longbreak" : "break", endTime);
+  sendToNative("break");
 
   chrome.notifications.create({
     type: "basic", iconUrl: "icons/icon48.png",
@@ -222,6 +258,7 @@ async function stopTimer() {
   await updateBlockingRules(state.blacklist, state.whitelist, false, settings.blockMode);
   await chrome.alarms.clearAll();
   chrome.action.setBadgeText({ text: "" });
+  sendToNative("idle");
 }
 
 function updateBadge(phase, endTime) {
@@ -237,6 +274,10 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === "pomodoroTick") {
     const state = await getState();
     if (state.endTime) updateBadge(state.phase, state.endTime);
+    // Keep native host alive & re-block apps that were reopened during work
+    if (state.phase === "work" && (state.blockedApps ?? []).length > 0) {
+      sendToNative("work");
+    }
   }
 
   if (alarm.name === "minutePing") {
@@ -360,6 +401,13 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         await updateBlockingRules(state.blacklist, msg.whitelist, state.phase === "work", settings.blockMode);
         break;
       }
+      case "UPDATE_BLOCKED_APPS": {
+        const state = await getState();
+        await setState({ blockedApps: msg.blockedApps });
+        // If a work session is active, push the new list to the native host now
+        if (state.phase === "work") sendToNative("work");
+        break;
+      }
       case "FINISH": {
         // Stop session, reset round counter and goal — clean slate
         const state = await getState();
@@ -371,6 +419,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         await updateBlockingRules(state.blacklist, state.whitelist, false, (await getSettings()).blockMode);
         await chrome.alarms.clearAll();
         chrome.action.setBadgeText({ text: "" });
+        sendToNative("idle");
         break;
       }
       case "UPDATE_SETTINGS": {

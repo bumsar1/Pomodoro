@@ -46,6 +46,9 @@ const els = {
   whitelist:         document.getElementById("whitelist"),
   whiteInput:        document.getElementById("whiteInput"),
   addWhiteBtn:       document.getElementById("addWhiteBtn"),
+  appslist:          document.getElementById("appslist"),
+  appInput:          document.getElementById("appInput"),
+  addAppBtn:         document.getElementById("addAppBtn"),
   sessionsCount:     document.getElementById("sessionsCount"),
   focusTime:         document.getElementById("focusTime"),
   blockedCount:      document.getElementById("blockedCount"),
@@ -481,6 +484,39 @@ async function removeWhiteSite(domain) {
   renderWhitelist(updated);
 }
 
+// ── Blocked apps (macOS) ──────────────────────────────────────────────────────
+
+function renderApps(list) {
+  els.appslist.innerHTML = "";
+  list.forEach((app) => {
+    const item = document.createElement("div");
+    item.className = "site-item";
+    item.style.background = "#2a1a3a";
+    item.style.color = "#b080d0";
+    item.innerHTML = `<span class="domain">🖥️ ${app}</span><button class="remove-app" data-app="${app}" title="Remove">×</button>`;
+    els.appslist.appendChild(item);
+  });
+}
+
+async function addApp() {
+  const name = els.appInput.value.trim();
+  if (!name) return;
+  const state = await sendMsg({ type: "GET_STATE" });
+  const list  = state.blockedApps ?? [];
+  if (list.includes(name)) { els.appInput.value = ""; return; }
+  const updated = [...list, name];
+  await sendMsg({ type: "UPDATE_BLOCKED_APPS", blockedApps: updated });
+  els.appInput.value = "";
+  renderApps(updated);
+}
+
+async function removeApp(name) {
+  const state   = await sendMsg({ type: "GET_STATE" });
+  const updated = (state.blockedApps ?? []).filter((a) => a !== name);
+  await sendMsg({ type: "UPDATE_BLOCKED_APPS", blockedApps: updated });
+  renderApps(updated);
+}
+
 // ── Heatmap ──────────────────────────────────────────────────────────────────
 
 function heatColor(minutes) {
@@ -776,6 +812,13 @@ els.whitelist.addEventListener("click", (e) => {
   if (btn && !btn.disabled) removeWhiteSite(btn.dataset.domain);
 });
 
+els.addAppBtn.addEventListener("click",  addApp);
+els.appInput.addEventListener("keydown", (e) => { if (e.key === "Enter") addApp(); });
+els.appslist.addEventListener("click", (e) => {
+  const btn = e.target.closest(".remove-app");
+  if (btn) removeApp(btn.dataset.app);
+});
+
 els.settingsToggle.addEventListener("click", () => {
   els.settingsPanel.classList.toggle("open");
 });
@@ -845,6 +888,7 @@ document.getElementById("durationPill").addEventListener("click", () => {
   renderState(state);
   renderBlacklist(state.blacklist  ?? []);
   renderWhitelist(state.whitelist  ?? []);
+  renderApps(state.blockedApps     ?? []);
   loadSettingsIntoForm(state.settings ?? {});
   renderHeatmap(state.focusHistory ?? {});
   showSuggestion(currentSuggestionIdx);
