@@ -4,3 +4,7 @@ rain.mp3
 
 # Chrome extension metadata (auto-generated)
 _metadata/
+
+# Python cache
+__pycache__/
+*.pyc
