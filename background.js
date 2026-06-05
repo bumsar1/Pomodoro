@@ -112,6 +112,34 @@ async function updateFocusHistory(workMin) {
   return hist;
 }
 
+async function reloadBlockedTabs(blacklist, whitelist, blockMode) {
+  try {
+    const tabs = await chrome.tabs.query({ url: ["http://*/*", "https://*/*"] });
+
+    for (const tab of tabs) {
+      if (!tab.url) continue;
+      let shouldReload = false;
+
+      if (blockMode === "allowlist") {
+        // Block everything not in whitelist
+        const host = new URL(tab.url).hostname.replace(/^www\./, "");
+        const allowed = (whitelist ?? []).some(d => host === d || host.endsWith("." + d));
+        shouldReload = !allowed;
+      } else {
+        // Block only blacklisted domains
+        const host = new URL(tab.url).hostname.replace(/^www\./, "");
+        const blocked   = (blacklist ?? []).some(d => host === d || host.endsWith("." + d));
+        const excepted  = (whitelist ?? []).some(d => host === d || host.endsWith("." + d));
+        shouldReload = blocked && !excepted;
+      }
+
+      if (shouldReload) chrome.tabs.reload(tab.id);
+    }
+  } catch (e) {
+    console.warn("reloadBlockedTabs error:", e);
+  }
+}
+
 async function startWork() {
   const [state, settings] = await Promise.all([getState(), getSettings()]);
 
@@ -130,6 +158,7 @@ async function startWork() {
 
   await setState({ phase: "work", endTime, lastDate: today, focusToday });
   await updateBlockingRules(state.blacklist, state.whitelist, true, settings.blockMode);
+  await reloadBlockedTabs(state.blacklist, state.whitelist, settings.blockMode);
   await chrome.alarms.clearAll();
   await chrome.alarms.create("pomodoroTick", { periodInMinutes: 1 / 60 });
   await chrome.alarms.create("phaseEnd",     { delayInMinutes: workMin });
