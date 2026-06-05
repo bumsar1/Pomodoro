@@ -49,6 +49,23 @@ const els = {
   appslist:          document.getElementById("appslist"),
   appInput:          document.getElementById("appInput"),
   addAppBtn:         document.getElementById("addAppBtn"),
+  // Presets
+  presetSelect:      document.getElementById("presetSelect"),
+  managePresetsBtn:  document.getElementById("managePresetsBtn"),
+  presetHint:        document.getElementById("presetHint"),
+  presetsToggle:     document.getElementById("presetsToggle"),
+  presetsBody:       document.getElementById("presetsBody"),
+  presetList:        document.getElementById("presetList"),
+  newPresetBtn:      document.getElementById("newPresetBtn"),
+  presetEditor:      document.getElementById("presetEditor"),
+  pName:             document.getElementById("pName"),
+  pMode:             document.getElementById("pMode"),
+  pSites:            document.getElementById("pSites"),
+  pSitesLabel:       document.getElementById("pSitesLabel"),
+  pApps:             document.getElementById("pApps"),
+  pUrl:              document.getElementById("pUrl"),
+  pCancel:           document.getElementById("pCancel"),
+  pSave:             document.getElementById("pSave"),
   sessionsCount:     document.getElementById("sessionsCount"),
   focusTime:         document.getElementById("focusTime"),
   blockedCount:      document.getElementById("blockedCount"),
@@ -517,6 +534,109 @@ async function removeApp(name) {
   renderApps(updated);
 }
 
+// ── Presets ───────────────────────────────────────────────────────────────────
+
+let editingPresetId = null;
+
+function splitList(raw) {
+  return (raw ?? "")
+    .split(/[,\n]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function renderPresetSelect(presets, activeId) {
+  els.presetSelect.innerHTML = '<option value="">No preset (manual)</option>';
+  (presets ?? []).forEach((p) => {
+    const opt = document.createElement("option");
+    opt.value = p.id;
+    opt.textContent = p.name;
+    if (p.id === activeId) opt.selected = true;
+    els.presetSelect.appendChild(opt);
+  });
+  updatePresetHint(presets, activeId);
+}
+
+function updatePresetHint(presets, activeId) {
+  const p = (presets ?? []).find((x) => x.id === activeId);
+  if (!p) { els.presetHint.textContent = ""; return; }
+  const bits = [];
+  bits.push(p.blockMode === "allowlist" ? "allow-only" : "block-listed");
+  if ((p.apps ?? []).length) bits.push(`closes ${p.apps.length} app${p.apps.length > 1 ? "s" : ""}`);
+  if (p.autoOpenUrl) bits.push("auto-opens a page");
+  els.presetHint.textContent = `“${p.name}” — ${bits.join(" · ")}`;
+}
+
+function renderPresetList(presets) {
+  els.presetList.innerHTML = "";
+  if (!(presets ?? []).length) {
+    els.presetList.innerHTML = `<div style="font-size:12px;color:#444;padding:4px 0">No presets yet.</div>`;
+    return;
+  }
+  presets.forEach((p) => {
+    const item = document.createElement("div");
+    item.className = "preset-list-item";
+    const mode = p.blockMode === "allowlist" ? "Allow only" : "Block listed";
+    const meta = [mode, `${(p.sites ?? []).length} sites`, `${(p.apps ?? []).length} apps`].join(" · ");
+    item.innerHTML = `
+      <div>
+        <div class="pli-name">${p.name}</div>
+        <div class="pli-meta">${meta}</div>
+      </div>
+      <div class="pli-actions">
+        <button class="pli-btn pli-edit"   data-id="${p.id}" title="Edit">✏️</button>
+        <button class="pli-btn pli-delete" data-id="${p.id}" title="Delete">🗑</button>
+      </div>`;
+    els.presetList.appendChild(item);
+  });
+}
+
+function openPresetEditor(preset) {
+  editingPresetId = preset?.id ?? null;
+  els.pName.value = preset?.name ?? "";
+  els.pMode.value = preset?.blockMode ?? "allowlist";
+  els.pSites.value = (preset?.sites ?? []).join(", ");
+  els.pApps.value  = (preset?.apps ?? []).join(", ");
+  els.pUrl.value   = preset?.autoOpenUrl ?? "";
+  updateSitesLabel();
+  els.presetEditor.classList.add("open");
+  els.pName.focus();
+}
+
+function closePresetEditor() {
+  editingPresetId = null;
+  els.presetEditor.classList.remove("open");
+}
+
+function updateSitesLabel() {
+  els.pSitesLabel.textContent = els.pMode.value === "allowlist" ? "Allowed sites" : "Blocked sites";
+}
+
+async function savePreset() {
+  const name = els.pName.value.trim();
+  if (!name) { els.pName.focus(); return; }
+  const preset = {
+    id:          editingPresetId ?? `p_${Date.now()}`,
+    name,
+    blockMode:   els.pMode.value,
+    sites:       splitList(els.pSites.value).map(normalizeDomain).filter(Boolean),
+    apps:        splitList(els.pApps.value),
+    autoOpenUrl: els.pUrl.value.trim(),
+  };
+  await sendMsg({ type: "SAVE_PRESET", preset });
+  closePresetEditor();
+  const state = await sendMsg({ type: "GET_STATE" });
+  renderPresetList(state.presets ?? []);
+  renderPresetSelect(state.presets ?? [], state.activePresetId);
+}
+
+async function deletePreset(id) {
+  await sendMsg({ type: "DELETE_PRESET", id });
+  const state = await sendMsg({ type: "GET_STATE" });
+  renderPresetList(state.presets ?? []);
+  renderPresetSelect(state.presets ?? [], state.activePresetId);
+}
+
 // ── Heatmap ──────────────────────────────────────────────────────────────────
 
 function heatColor(minutes) {
@@ -859,6 +979,42 @@ els.heatmapToggle.addEventListener("click", () => {
   els.heatmapBody.classList.toggle("open");
 });
 
+// Preset listeners
+els.presetSelect.addEventListener("change", async () => {
+  const id = els.presetSelect.value || null;
+  await sendMsg({ type: "SET_ACTIVE_PRESET", id });
+  const state = await sendMsg({ type: "GET_STATE" });
+  updatePresetHint(state.presets ?? [], state.activePresetId);
+});
+
+els.managePresetsBtn.addEventListener("click", () => {
+  els.presetsToggle.classList.add("open");
+  els.presetsBody.classList.add("open");
+  els.presetsBody.scrollIntoView({ behavior: "smooth", block: "nearest" });
+});
+
+els.presetsToggle.addEventListener("click", () => {
+  els.presetsToggle.classList.toggle("open");
+  els.presetsBody.classList.toggle("open");
+});
+
+els.newPresetBtn.addEventListener("click", () => openPresetEditor(null));
+els.pCancel.addEventListener("click", closePresetEditor);
+els.pSave.addEventListener("click", savePreset);
+els.pMode.addEventListener("change", updateSitesLabel);
+
+els.presetList.addEventListener("click", async (e) => {
+  const editBtn = e.target.closest(".pli-edit");
+  const delBtn  = e.target.closest(".pli-delete");
+  if (editBtn) {
+    const state  = await sendMsg({ type: "GET_STATE" });
+    const preset = (state.presets ?? []).find((p) => p.id === editBtn.dataset.id);
+    if (preset) openPresetEditor(preset);
+  } else if (delBtn) {
+    deletePreset(delBtn.dataset.id);
+  }
+});
+
 // Goal listeners
 els.goalEnabled.addEventListener("change", updateGoalPreview);
 els.goalMinutes.addEventListener("input",  updateGoalPreview);
@@ -889,6 +1045,8 @@ document.getElementById("durationPill").addEventListener("click", () => {
   renderBlacklist(state.blacklist  ?? []);
   renderWhitelist(state.whitelist  ?? []);
   renderApps(state.blockedApps     ?? []);
+  renderPresetSelect(state.presets ?? [], state.activePresetId);
+  renderPresetList(state.presets   ?? []);
   loadSettingsIntoForm(state.settings ?? {});
   renderHeatmap(state.focusHistory ?? {});
   showSuggestion(currentSuggestionIdx);

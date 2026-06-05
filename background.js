@@ -20,6 +20,7 @@ async function getState() {
     "phase", "endTime", "blacklist", "whitelist", "blockedApps",
     "round", "focusToday", "lastDate", "currentTask", "focusHistory",
     "goalActive", "goalCycles", "goalCyclesLeft", "goalLastWorkMin",
+    "presets", "activePresetId",
   ]);
   return {
     phase:           data.phase           ?? "idle",
@@ -36,6 +37,45 @@ async function getState() {
     goalCycles:      data.goalCycles      ?? 0,
     goalCyclesLeft:  data.goalCyclesLeft  ?? 0,
     goalLastWorkMin: data.goalLastWorkMin ?? 0,
+    presets:         data.presets         ?? [],
+    activePresetId:  data.activePresetId  ?? null,
+  };
+}
+
+function hostOf(url) {
+  try { return new URL(url).host.replace(/^www\./, ""); }
+  catch { return ""; }
+}
+
+// Resolves the blocking config that should be in effect right now:
+// the active preset's config if one is selected, otherwise the manual lists.
+async function getActiveConfig() {
+  const [state, settings] = await Promise.all([getState(), getSettings()]);
+  const preset = (state.presets ?? []).find((p) => p.id === state.activePresetId);
+
+  if (preset) {
+    const allow = preset.blockMode === "allowlist";
+    let sites = [...(preset.sites ?? [])];
+    // In allow-only mode, make sure the auto-open URL's host is reachable
+    if (allow && preset.autoOpenUrl) {
+      const h = hostOf(preset.autoOpenUrl);
+      if (h && !sites.includes(h)) sites.push(h);
+    }
+    return {
+      blockMode:   preset.blockMode ?? "blacklist",
+      blacklist:   allow ? [] : sites,
+      whitelist:   allow ? sites : [],
+      blockedApps: preset.apps ?? [],
+      autoOpenUrl: preset.autoOpenUrl ?? "",
+    };
+  }
+
+  return {
+    blockMode:   settings.blockMode,
+    blacklist:   state.blacklist ?? [],
+    whitelist:   state.whitelist ?? [],
+    blockedApps: state.blockedApps ?? [],
+    autoOpenUrl: "",
   };
 }
 
@@ -66,11 +106,11 @@ function connectNativeHost() {
 }
 
 async function sendToNative(phase) {
-  const state = await getState();
-  const port  = connectNativeHost();
+  const cfg  = await getActiveConfig();
+  const port = connectNativeHost();
   if (!port) return;
   try {
-    port.postMessage({ type: "SESSION", phase, apps: state.blockedApps ?? [] });
+    port.postMessage({ type: "SESSION", phase, apps: cfg.blockedApps ?? [] });
   } catch (e) {
     nativePort = null;
   }
@@ -158,17 +198,19 @@ async function reloadBlockedTabs(blacklist, whitelist, blockMode) {
       if (!tab.url) continue;
       let shouldReload = false;
 
+      // .host includes the port (e.g. "localhost:4567"); also derive the
+      // bare hostname so both "localhost" and "localhost:4567" match.
+      const u    = new URL(tab.url);
+      const host = u.host.replace(/^www\./, "");
+      const bare = u.hostname.replace(/^www\./, "");
+      const matches = (list) => (list ?? []).some(
+        (d) => host === d || bare === d || bare.endsWith("." + d)
+      );
+
       if (blockMode === "allowlist") {
-        // Block everything not in whitelist
-        const host = new URL(tab.url).hostname.replace(/^www\./, "");
-        const allowed = (whitelist ?? []).some(d => host === d || host.endsWith("." + d));
-        shouldReload = !allowed;
+        shouldReload = !matches(whitelist);
       } else {
-        // Block only blacklisted domains
-        const host = new URL(tab.url).hostname.replace(/^www\./, "");
-        const blocked   = (blacklist ?? []).some(d => host === d || host.endsWith("." + d));
-        const excepted  = (whitelist ?? []).some(d => host === d || host.endsWith("." + d));
-        shouldReload = blocked && !excepted;
+        shouldReload = matches(blacklist) && !matches(whitelist);
       }
 
       if (shouldReload) chrome.tabs.reload(tab.id);
@@ -194,15 +236,22 @@ async function startWork() {
   const today   = todayKey();
   const focusToday = state.lastDate === today ? state.focusToday : 0;
 
+  const cfg = await getActiveConfig();
+
   await setState({ phase: "work", endTime, lastDate: today, focusToday });
-  await updateBlockingRules(state.blacklist, state.whitelist, true, settings.blockMode);
-  await reloadBlockedTabs(state.blacklist, state.whitelist, settings.blockMode);
+  await updateBlockingRules(cfg.blacklist, cfg.whitelist, true, cfg.blockMode);
+  await reloadBlockedTabs(cfg.blacklist, cfg.whitelist, cfg.blockMode);
   await chrome.alarms.clearAll();
   await chrome.alarms.create("pomodoroTick", { periodInMinutes: 1 / 60 });
   await chrome.alarms.create("phaseEnd",     { delayInMinutes: workMin });
   await chrome.alarms.create("minutePing",   { periodInMinutes: 5 });
   updateBadge("work", endTime);
   sendToNative("work");
+
+  // Auto-open the preset's URL (opened after rules apply so it isn't blocked)
+  if (cfg.autoOpenUrl) {
+    try { chrome.tabs.create({ url: cfg.autoOpenUrl }); } catch (e) {}
+  }
 }
 
 async function startBreak(isLong = false) {
@@ -279,8 +328,9 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     const state = await getState();
     if (state.endTime) updateBadge(state.phase, state.endTime);
     // Keep native host alive & re-block apps that were reopened during work
-    if (state.phase === "work" && (state.blockedApps ?? []).length > 0) {
-      sendToNative("work");
+    if (state.phase === "work") {
+      const cfg = await getActiveConfig();
+      if ((cfg.blockedApps ?? []).length > 0) sendToNative("work");
     }
   }
 
@@ -431,8 +481,29 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         await setState({ settings: msg.settings });
         // Re-apply rules if mode changed while session is active
         if (state.phase === "work") {
-          await updateBlockingRules(state.blacklist, state.whitelist, true, msg.settings.blockMode);
+          const cfg = await getActiveConfig();
+          await updateBlockingRules(cfg.blacklist, cfg.whitelist, true, cfg.blockMode);
         }
+        break;
+      }
+      case "SAVE_PRESET": {
+        const state = await getState();
+        const presets = [...(state.presets ?? [])];
+        const idx = presets.findIndex((p) => p.id === msg.preset.id);
+        if (idx >= 0) presets[idx] = msg.preset;
+        else presets.push(msg.preset);
+        await setState({ presets });
+        break;
+      }
+      case "DELETE_PRESET": {
+        const state = await getState();
+        const presets = (state.presets ?? []).filter((p) => p.id !== msg.id);
+        const activePresetId = state.activePresetId === msg.id ? null : state.activePresetId;
+        await setState({ presets, activePresetId });
+        break;
+      }
+      case "SET_ACTIVE_PRESET": {
+        await setState({ activePresetId: msg.id ?? null });
         break;
       }
     }
@@ -444,12 +515,13 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 // ── Session restore ───────────────────────────────────────────────────────────
 
 async function restoreSession() {
-  const [state, settings] = await Promise.all([getState(), getSettings()]);
+  const state = await getState();
   if (state.phase !== "idle" && state.endTime) {
     if (Date.now() > state.endTime) {
       await stopTimer();
     } else {
-      await updateBlockingRules(state.blacklist, state.whitelist, state.phase === "work", settings.blockMode);
+      const cfg = await getActiveConfig();
+      await updateBlockingRules(cfg.blacklist, cfg.whitelist, state.phase === "work", cfg.blockMode);
       updateBadge(state.phase, state.endTime);
     }
   }

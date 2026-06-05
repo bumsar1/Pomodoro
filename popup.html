@@ -103,6 +103,118 @@
     .btn-stop  { background: #252540; color: #777; border: 1px solid #333; }
     .btn-stop.counting { color: #f39c12; border-color: #f39c12; }
 
+    /* ── Preset bar ── */
+    .preset-bar { display: flex; gap: 7px; padding: 0 18px 4px; }
+    .preset-select {
+      flex: 1;
+      padding: 7px 10px;
+      background: #20203a;
+      border: 1px solid #3a3a6a;
+      border-radius: 8px;
+      color: #c0c0e0;
+      font-size: 13px;
+      font-weight: 600;
+      outline: none;
+      cursor: pointer;
+    }
+    .preset-select:focus { border-color: #5050a0; }
+    .preset-manage {
+      width: 36px;
+      background: #20203a;
+      border: 1px solid #3a3a6a;
+      border-radius: 8px;
+      color: #8080b0;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .preset-manage:hover { background: #2a2a4a; }
+    .preset-hint {
+      text-align: center;
+      font-size: 11px;
+      color: #6060a0;
+      padding: 0 18px;
+      min-height: 14px;
+      margin-bottom: 4px;
+    }
+
+    /* ── Presets management panel ── */
+    .presets-panel { border-top: 1px solid #252540; }
+    .presets-toggle {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 18px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #444;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .presets-toggle:hover { color: #777; }
+    .presets-toggle .arrow { transition: transform 0.2s; }
+    .presets-toggle.open .arrow { transform: rotate(180deg); }
+
+    .presets-body { display: none; padding: 0 18px 16px; }
+    .presets-body.open { display: block; }
+
+    .preset-list-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 10px;
+      background: #20203a;
+      border-radius: 7px;
+      margin-bottom: 5px;
+    }
+    .preset-list-item .pli-name { font-size: 13px; font-weight: 600; color: #c0c0e0; }
+    .preset-list-item .pli-meta { font-size: 10px; color: #555; margin-top: 1px; }
+    .preset-list-item .pli-actions { display: flex; gap: 4px; }
+    .pli-btn {
+      background: none; border: none; cursor: pointer;
+      font-size: 13px; padding: 2px 5px; border-radius: 4px; color: #666;
+    }
+    .pli-btn:hover { background: #2a2a4a; color: #ccc; }
+
+    .new-preset-btn {
+      width: 100%;
+      padding: 8px;
+      margin-top: 4px;
+      background: #20203a;
+      border: 1px dashed #3a3a6a;
+      border-radius: 7px;
+      color: #8080b0;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .new-preset-btn:hover { background: #2a2a4a; border-color: #5050a0; }
+
+    .preset-editor { display: none; margin-top: 10px; padding-top: 10px; border-top: 1px solid #252540; }
+    .preset-editor.open { display: block; }
+    .pe-input {
+      width: 100%;
+      padding: 7px 10px;
+      margin-bottom: 8px;
+      background: #252540;
+      border: 1px solid #333;
+      border-radius: 6px;
+      color: #eee;
+      font-size: 12px;
+      outline: none;
+    }
+    .pe-input:focus { border-color: #5050a0; }
+    .pe-input::placeholder { color: #3a3a5a; }
+    select.pe-input { cursor: pointer; }
+    .pe-label { display: block; font-size: 10px; color: #555; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+    .pe-actions { display: flex; gap: 7px; margin-top: 4px; }
+    .pe-cancel { flex: 0 0 auto; padding: 8px 14px; background: #252540; color: #777; border: 1px solid #333; border-radius: 6px; font-size: 12px; cursor: pointer; }
+    .pe-save { flex: 1; padding: 8px; background: #353578; color: #ccc; border: none; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; }
+    .pe-save:hover { background: #4545a0; }
+
     /* ── Duration pill ── */
     .duration-pill {
       font-size: 11px;
@@ -396,6 +508,14 @@
     </div>
   </div>
 
+  <div class="preset-bar">
+    <select class="preset-select" id="presetSelect">
+      <option value="">No preset (manual)</option>
+    </select>
+    <button class="preset-manage" id="managePresetsBtn" title="Manage presets">✏️</button>
+  </div>
+  <div class="preset-hint" id="presetHint"></div>
+
   <div class="timer-ring">
     <div class="ring-wrap">
       <svg width="140" height="140" viewBox="0 0 140 140">
@@ -540,6 +660,41 @@
       <button id="addAppBtn" style="background:#3a1a4a;color:#9b59b6">+</button>
     </div>
     <div class="blacklist" id="appslist"></div>
+  </div>
+
+  <!-- Presets management panel -->
+  <div class="presets-panel">
+    <button class="presets-toggle" id="presetsToggle">
+      <span>Manage presets</span>
+      <span class="arrow">▾</span>
+    </button>
+    <div class="presets-body" id="presetsBody">
+      <div id="presetList"></div>
+      <button class="new-preset-btn" id="newPresetBtn">＋ New preset</button>
+
+      <div class="preset-editor" id="presetEditor">
+        <input class="pe-input" id="pName" type="text" placeholder="Preset name (e.g. Manga)" maxlength="30" />
+
+        <select class="pe-input" id="pMode">
+          <option value="allowlist">Allow only these sites (block everything else)</option>
+          <option value="blacklist">Block these sites (allow everything else)</option>
+        </select>
+
+        <label class="pe-label" id="pSitesLabel">Allowed sites</label>
+        <input class="pe-input" id="pSites" type="text" placeholder="localhost:4567, notion.so" />
+
+        <label class="pe-label">Apps to close (Mac)</label>
+        <input class="pe-input" id="pApps" type="text" placeholder="Discord, Spotify" />
+
+        <label class="pe-label">Auto-open URL (optional)</label>
+        <input class="pe-input" id="pUrl" type="text" placeholder="http://localhost:4567/library?tab=0" />
+
+        <div class="pe-actions">
+          <button class="pe-cancel" id="pCancel">Cancel</button>
+          <button class="pe-save"   id="pSave">Save preset</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Heatmap panel -->
