@@ -95,7 +95,13 @@ function connectNativeHost() {
       nativePort = null;
     });
     nativePort.onMessage.addListener((msg) => {
-      console.log("[native] host says:", msg);
+      if (msg && msg.type === "COMMAND") {
+        handleExternalCommand(msg.action);
+      } else if (msg && msg.type === "HEARTBEAT") {
+        // no-op; just keeps the service worker alive
+      } else {
+        console.log("[native] host says:", msg);
+      }
     });
     console.log("[native] connected to", NATIVE_HOST);
   } catch (e) {
@@ -103,6 +109,27 @@ function connectNativeHost() {
     nativePort = null;
   }
   return nativePort;
+}
+
+// Commands pushed in from outside (e.g. Raycast → command file → native host)
+async function handleExternalCommand(action) {
+  console.log("[native] command:", action);
+  const state = await getState();
+  switch (action) {
+    case "focus":
+      await startWork();
+      break;
+    case "break":
+      if (state.phase === "work") await startBreak(false);
+      break;
+    case "stop":
+      await stopTimer();
+      break;
+    case "toggle":
+      if (state.phase === "idle") await startWork();
+      else await stopTimer();
+      break;
+  }
 }
 
 async function sendToNative(phase) {
@@ -533,3 +560,20 @@ async function restoreSession() {
 
 chrome.runtime.onStartup.addListener(restoreSession);
 chrome.runtime.onInstalled.addListener(restoreSession);
+
+// ── Keep the native port open so external commands (Raycast) are always heard ──
+// A live native-messaging port also keeps the service worker awake. If it drops,
+// a periodic alarm reconnects it.
+function ensureNativeConnection() {
+  connectNativeHost();
+}
+
+chrome.runtime.onStartup.addListener(ensureNativeConnection);
+chrome.runtime.onInstalled.addListener(ensureNativeConnection);
+chrome.alarms.create("keepNativeAlive", { periodInMinutes: 0.5 });
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === "keepNativeAlive") ensureNativeConnection();
+});
+
+// Connect immediately on service-worker load
+ensureNativeConnection();

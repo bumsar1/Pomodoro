@@ -44,11 +44,33 @@ def read_message():
     return json.loads(data)
 
 
+write_lock = threading.Lock()
+
 def send_message(obj):
     encoded = json.dumps(obj).encode("utf-8")
-    sys.stdout.buffer.write(struct.pack("<I", len(encoded)))
-    sys.stdout.buffer.write(encoded)
-    sys.stdout.buffer.flush()
+    with write_lock:
+        sys.stdout.buffer.write(struct.pack("<I", len(encoded)))
+        sys.stdout.buffer.write(encoded)
+        sys.stdout.buffer.flush()
+
+
+# ── External command file (Raycast etc.) ──────────────────────────────────────
+# Anything that writes an action ("focus" / "break" / "stop" / "toggle") to this
+# file triggers the extension. The host reads it, clears it, and forwards it.
+CMD_PATH = "/tmp/pomodoro_cmd"
+
+def read_command():
+    try:
+        with open(CMD_PATH, "r") as f:
+            action = f.read().strip().lower()
+        if action:
+            open(CMD_PATH, "w").close()  # clear it
+            return action
+    except FileNotFoundError:
+        pass
+    except Exception as e:
+        log(f"read_command error: {e}")
+    return None
 
 
 # ── App control ───────────────────────────────────────────────────────────────
@@ -109,15 +131,34 @@ def enforce():
     return killed
 
 
-# ── Background monitor — re-quits apps that get reopened mid-session ───────────
+# ── Background monitor ─────────────────────────────────────────────────────────
+# Runs every second:
+#   - checks the command file and forwards any action to the extension
+#   - every 3s, re-quits blocked apps that were reopened
+#   - every 20s, sends a heartbeat to keep the extension's worker alive
 
 def monitor_loop():
+    tick = 0
+    # Clear any stale command left over from a previous run
+    try: open(CMD_PATH, "w").close()
+    except Exception: pass
+
     while True:
         try:
-            enforce()
+            action = read_command()
+            if action:
+                log(f"command → {action}")
+                send_message({"type": "COMMAND", "action": action})
+
+            if tick % 3 == 0:
+                enforce()
+
+            if tick % 20 == 0:
+                send_message({"type": "HEARTBEAT"})
         except Exception as e:
             log(f"monitor error: {e}")
-        time.sleep(3)
+        tick += 1
+        time.sleep(1)
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
