@@ -213,6 +213,23 @@ function setVolume(v) {
   if (audioGain) audioGain.gain.value = v;
 }
 
+// Ambient should play ONLY during work — muted on break, resumed on next work.
+let ambientOn = false;
+
+function syncAmbient(state) {
+  const s = state?.settings ?? {};
+  const wants     = s.soundType && s.soundType !== "off";
+  const shouldPlay = wants && state?.phase === "work";
+
+  if (shouldPlay && !ambientOn) {
+    startSound(s.soundType, s.soundVolume ?? 0.4);
+    ambientOn = true;
+  } else if (!shouldPlay && ambientOn) {
+    stopSound();
+    ambientOn = false;
+  }
+}
+
 // ── Stop-button crunch sounds (strict mode) ───────────────────────────────────
 
 function makeDistortionCurve(amount) {
@@ -833,6 +850,7 @@ function startTick() {
   tickInterval = setInterval(async () => {
     const state = await sendMsg({ type: "GET_STATE" });
     renderState(state);
+    syncAmbient(state);
     if (state.phase === "idle") stopTick();
   }, 1000);
 }
@@ -861,19 +879,15 @@ els.btnStart.addEventListener("click", async () => {
   await incrementTodaySessions();
   const state = await sendMsg({ type: "GET_STATE" });
   renderState(state);
+  syncAmbient(state);
   startTick();
-
-  // Start sound if configured
-  if (state.settings?.soundType && state.settings.soundType !== "off") {
-    startSound(state.settings.soundType, state.settings.soundVolume ?? 0.4);
-  }
 });
 
 els.btnBreak.addEventListener("click", async () => {
-  stopSound();
   await sendMsg({ type: "START_BREAK" });
   const state = await sendMsg({ type: "GET_STATE" });
   renderState(state);
+  syncAmbient(state); // mutes ambient now that we're on break
   currentSuggestionIdx = Math.floor(Math.random() * BREAK_SUGGESTIONS.length);
   showSuggestion(currentSuggestionIdx);
   startTick();
@@ -898,7 +912,7 @@ els.btnStop.addEventListener("click", async () => {
     return;
   }
 
-  stopSound();
+  stopSound(); ambientOn = false;
   await sendMsg({ type: "STOP" });
   stopTick();
   const fresh = await sendMsg({ type: "GET_STATE" });
@@ -907,7 +921,7 @@ els.btnStop.addEventListener("click", async () => {
 
 els.confirmAbandon.addEventListener("click", async () => {
   const reason = els.reasonInput.value.trim() || "No reason given";
-  stopSound();
+  stopSound(); ambientOn = false;
   await sendMsg({ type: "STOP_WITH_REASON", reason });
   hideReasonForm();
   stopTick();
@@ -928,7 +942,7 @@ els.breakNextBtn.addEventListener("click", () => {
 
 els.btnFinish.addEventListener("click", async () => {
   await sendMsg({ type: "FINISH" });
-  stopSound();
+  stopSound(); ambientOn = false;
   stopTick();
   strictClicks = 0;
   hideReasonForm();
@@ -1090,10 +1104,8 @@ document.getElementById("durationPill").addEventListener("click", () => {
     renderDots(state, state.settings ?? {});
   }
 
-  // Restore sound if session is active
-  if (state.phase === "work" && state.settings?.soundType && state.settings.soundType !== "off") {
-    startSound(state.settings.soundType, state.settings.soundVolume ?? 0.4);
-  }
+  // Resume ambient only if we're mid-work (muted during breaks)
+  syncAmbient(state);
 
   if (state.phase !== "idle") startTick();
 

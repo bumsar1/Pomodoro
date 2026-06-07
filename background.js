@@ -295,6 +295,7 @@ async function startBreak(isLong = false) {
   await chrome.alarms.create("phaseEnd",     { delayInMinutes: breakMin });
   updateBadge(isLong ? "longbreak" : "break", endTime);
   sendToNative("break");
+  playBreakChime();
 
   chrome.notifications.create({
     type: "basic", iconUrl: "icons/icon48.png",
@@ -381,18 +382,21 @@ async function ensureOffscreenDoc() {
   }
 }
 
-async function playPingSound() {
+async function playOffscreenSound(type, volume, closeAfterMs) {
   try {
     await ensureOffscreenDoc();
-    chrome.runtime.sendMessage({ target: "offscreen", type: "PLAY_PING", volume: 0.35 });
+    chrome.runtime.sendMessage({ target: "offscreen", type, volume });
     setTimeout(async () => {
       const ctxs = await chrome.runtime.getContexts({ contextTypes: ["OFFSCREEN_DOCUMENT"] });
       if (ctxs.length > 0) await chrome.offscreen.closeDocument();
-    }, 3000);
+    }, closeAfterMs);
   } catch (e) {
-    console.warn("Ping sound failed:", e);
+    console.warn(`${type} failed:`, e);
   }
 }
+
+async function playPingSound()  { return playOffscreenSound("PLAY_PING", 0.35, 3000); }
+async function playBreakChime() { return playOffscreenSound("PLAY_DING", 0.4,  2000); }
 
 // ── Message handler ───────────────────────────────────────────────────────────
 
