@@ -175,7 +175,7 @@ async function startSound(type, volume) {
 
   if (type === "rain") {
     try {
-      const url      = chrome.runtime.getURL("rain_small.mp3");
+      const url      = chrome.runtime.getURL("rain_loop.mp3");
       const response = await fetch(url);
       const buffer   = await response.arrayBuffer();
       const decoded  = await audioCtx.decodeAudioData(buffer);
