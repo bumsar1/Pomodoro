@@ -96,7 +96,7 @@ function connectNativeHost() {
     });
     nativePort.onMessage.addListener((msg) => {
       if (msg && msg.type === "COMMAND") {
-        handleExternalCommand(msg.action);
+        handleExternalCommand(msg.action, msg.preset);
       } else if (msg && msg.type === "HEARTBEAT") {
         // no-op; just keeps the service worker alive
       } else {
@@ -104,6 +104,8 @@ function connectNativeHost() {
       }
     });
     console.log("[native] connected to", NATIVE_HOST);
+    // Export current presets so external tools (Raycast) can list them
+    pushPresetsToNative();
   } catch (e) {
     console.warn("[native] connect failed:", e);
     nativePort = null;
@@ -111,12 +113,43 @@ function connectNativeHost() {
   return nativePort;
 }
 
+// Send the list of presets (id + name) to the host so external tools can list them
+async function pushPresetsToNative() {
+  const state = await getState();
+  const port  = connectNativeHost();
+  if (!port) return;
+  try {
+    port.postMessage({
+      type: "PRESETS",
+      presets: (state.presets ?? []).map((p) => ({ id: p.id, name: p.name })),
+    });
+  } catch (e) { nativePort = null; }
+}
+
+// Find a preset by exact or case-insensitive name match
+function findPresetByName(presets, name) {
+  if (!name) return null;
+  const n = name.trim().toLowerCase();
+  return (presets ?? []).find((p) => p.name.toLowerCase() === n)
+      || (presets ?? []).find((p) => p.name.toLowerCase().includes(n))
+      || null;
+}
+
 // Commands pushed in from outside (e.g. Raycast → command file → native host)
-async function handleExternalCommand(action) {
-  console.log("[native] command:", action);
+async function handleExternalCommand(action, presetName) {
+  console.log("[native] command:", action, presetName ?? "");
   const state = await getState();
   switch (action) {
     case "focus":
+      // Optionally switch to a named preset before starting
+      if (presetName !== undefined) {
+        if (presetName === "" || presetName === "manual") {
+          await setState({ activePresetId: null });
+        } else {
+          const p = findPresetByName(state.presets, presetName);
+          if (p) await setState({ activePresetId: p.id });
+        }
+      }
       await startWork();
       break;
     case "break":
@@ -524,6 +557,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         if (idx >= 0) presets[idx] = msg.preset;
         else presets.push(msg.preset);
         await setState({ presets });
+        pushPresetsToNative();
         break;
       }
       case "DELETE_PRESET": {
@@ -531,6 +565,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         const presets = (state.presets ?? []).filter((p) => p.id !== msg.id);
         const activePresetId = state.activePresetId === msg.id ? null : state.activePresetId;
         await setState({ presets, activePresetId });
+        pushPresetsToNative();
         break;
       }
       case "SET_ACTIVE_PRESET": {

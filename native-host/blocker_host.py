@@ -57,20 +57,25 @@ def send_message(obj):
 # ── External command file (Raycast etc.) ──────────────────────────────────────
 # Anything that writes an action ("focus" / "break" / "stop" / "toggle") to this
 # file triggers the extension. The host reads it, clears it, and forwards it.
-CMD_PATH = "/tmp/pomodoro_cmd"
+CMD_PATH      = "/tmp/pomodoro_cmd"
+PRESETS_PATH  = "/tmp/pomodoro_presets.json"
 
 def read_command():
+    """Returns (action, preset) or (None, None). Command format: 'focus' or 'focus:Preset Name'."""
     try:
         with open(CMD_PATH, "r") as f:
-            action = f.read().strip().lower()
-        if action:
+            raw = f.read().strip()
+        if raw:
             open(CMD_PATH, "w").close()  # clear it
-            return action
+            if ":" in raw:
+                action, preset = raw.split(":", 1)
+                return action.strip().lower(), preset.strip()
+            return raw.lower(), None
     except FileNotFoundError:
         pass
     except Exception as e:
         log(f"read_command error: {e}")
-    return None
+    return None, None
 
 
 # ── App control ───────────────────────────────────────────────────────────────
@@ -145,10 +150,13 @@ def monitor_loop():
 
     while True:
         try:
-            action = read_command()
+            action, preset = read_command()
             if action:
-                log(f"command → {action}")
-                send_message({"type": "COMMAND", "action": action})
+                log(f"command → {action} preset={preset}")
+                msg = {"type": "COMMAND", "action": action}
+                if preset is not None:
+                    msg["preset"] = preset
+                send_message(msg)
 
             if tick % 3 == 0:
                 enforce()
@@ -184,6 +192,15 @@ def main():
             log(f"session → {state['phase']} apps={state['apps']}")
             killed = enforce()
             send_message({"ok": True, "phase": state["phase"], "killed": killed})
+
+        elif msg.get("type") == "PRESETS":
+            # Persist the preset list so external tools (Raycast generator) can read it
+            try:
+                with open(PRESETS_PATH, "w") as f:
+                    json.dump(msg.get("presets", []), f)
+                log(f"presets saved ({len(msg.get('presets', []))})")
+            except Exception as e:
+                log(f"presets write error: {e}")
 
 
 if __name__ == "__main__":
