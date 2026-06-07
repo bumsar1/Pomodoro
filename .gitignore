@@ -11,3 +11,6 @@ __pycache__/
 
 # Auto-generated per-preset Raycast commands
 raycast/pomodoro-preset-*.sh
+
+# macOS
+.DS_Store

@@ -2,6 +2,10 @@
 
 A Chrome extension that blocks distracting websites during focus sessions.
 
+<p align="center">
+  <img src="docs/screenshot.png" alt="Pomodoro Blocker popup" width="340" />
+</p>
+
 ## Features
 
 - **25/5 Pomodoro timer** with long break (15 min) after every 4 sessions
