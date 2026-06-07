@@ -8,3 +8,6 @@ _metadata/
 # Python cache
 __pycache__/
 *.pyc
+
+# Auto-generated per-preset Raycast commands
+raycast/pomodoro-preset-*.sh
