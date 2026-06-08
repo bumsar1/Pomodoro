@@ -657,6 +657,20 @@
     <div class="blacklist" id="appslist"></div>
   </div>
 
+  <div class="divider"></div>
+
+  <div class="section">
+    <div class="section-title" style="color:#3498db;opacity:0.85">Open apps (Mac)</div>
+    <div style="font-size:11px;color:#2a2a4a;margin-bottom:8px;line-height:1.4">
+      Launches these macOS apps when focus starts, e.g. <code style="color:#333">Memento</code>.
+    </div>
+    <div class="add-row">
+      <input id="openAppInput" type="text" placeholder="Memento" />
+      <button id="addOpenAppBtn" style="background:#16344a;color:#3498db">+</button>
+    </div>
+    <div class="blacklist" id="openappslist"></div>
+  </div>
+
   <!-- Presets management panel -->
   <div class="presets-panel">
     <button class="presets-toggle" id="presetsToggle">
@@ -680,6 +694,9 @@
 
         <label class="pe-label">Apps to close (Mac)</label>
         <input class="pe-input" id="pApps" type="text" placeholder="Discord, Spotify" />
+
+        <label class="pe-label">Apps to open (Mac)</label>
+        <input class="pe-input" id="pOpenApps" type="text" placeholder="Memento" />
 
         <label class="pe-label">Auto-open URL (optional)</label>
         <input class="pe-input" id="pUrl" type="text" placeholder="http://localhost:4567/library?tab=0" />

@@ -49,6 +49,9 @@ const els = {
   appslist:          document.getElementById("appslist"),
   appInput:          document.getElementById("appInput"),
   addAppBtn:         document.getElementById("addAppBtn"),
+  openappslist:      document.getElementById("openappslist"),
+  openAppInput:      document.getElementById("openAppInput"),
+  addOpenAppBtn:     document.getElementById("addOpenAppBtn"),
   // Presets
   presetSelect:      document.getElementById("presetSelect"),
   managePresetsBtn:  document.getElementById("managePresetsBtn"),
@@ -63,6 +66,7 @@ const els = {
   pSites:            document.getElementById("pSites"),
   pSitesLabel:       document.getElementById("pSitesLabel"),
   pApps:             document.getElementById("pApps"),
+  pOpenApps:         document.getElementById("pOpenApps"),
   pUrl:              document.getElementById("pUrl"),
   pCancel:           document.getElementById("pCancel"),
   pSave:             document.getElementById("pSave"),
@@ -573,6 +577,39 @@ async function removeApp(name) {
   renderApps(updated);
 }
 
+// ── Open apps (macOS) ──────────────────────────────────────────────────────────
+
+function renderOpenApps(list) {
+  els.openappslist.innerHTML = "";
+  list.forEach((app) => {
+    const item = document.createElement("div");
+    item.className = "site-item";
+    item.style.background = "#142c3a";
+    item.style.color = "#5ab0e0";
+    item.innerHTML = `<span class="domain">🚀 ${app}</span><button class="remove-openapp" data-app="${app}" title="Remove">×</button>`;
+    els.openappslist.appendChild(item);
+  });
+}
+
+async function addOpenApp() {
+  const name = els.openAppInput.value.trim();
+  if (!name) return;
+  const state = await sendMsg({ type: "GET_STATE" });
+  const list  = state.openApps ?? [];
+  if (list.includes(name)) { els.openAppInput.value = ""; return; }
+  const updated = [...list, name];
+  await sendMsg({ type: "UPDATE_OPEN_APPS", openApps: updated });
+  els.openAppInput.value = "";
+  renderOpenApps(updated);
+}
+
+async function removeOpenApp(name) {
+  const state   = await sendMsg({ type: "GET_STATE" });
+  const updated = (state.openApps ?? []).filter((a) => a !== name);
+  await sendMsg({ type: "UPDATE_OPEN_APPS", openApps: updated });
+  renderOpenApps(updated);
+}
+
 // ── Presets ───────────────────────────────────────────────────────────────────
 
 let editingPresetId = null;
@@ -601,7 +638,8 @@ function updatePresetHint(presets, activeId) {
   if (!p) { els.presetHint.textContent = ""; return; }
   const bits = [];
   bits.push(p.blockMode === "allowlist" ? "allow-only" : "block-listed");
-  if ((p.apps ?? []).length) bits.push(`closes ${p.apps.length} app${p.apps.length > 1 ? "s" : ""}`);
+  if ((p.apps ?? []).length)     bits.push(`closes ${p.apps.length} app${p.apps.length > 1 ? "s" : ""}`);
+  if ((p.openApps ?? []).length) bits.push(`opens ${p.openApps.length} app${p.openApps.length > 1 ? "s" : ""}`);
   if (p.autoOpenUrl) bits.push("auto-opens a page");
   els.presetHint.textContent = `“${p.name}” — ${bits.join(" · ")}`;
 }
@@ -634,9 +672,10 @@ function openPresetEditor(preset) {
   editingPresetId = preset?.id ?? null;
   els.pName.value = preset?.name ?? "";
   els.pMode.value = preset?.blockMode ?? "allowlist";
-  els.pSites.value = (preset?.sites ?? []).join(", ");
-  els.pApps.value  = (preset?.apps ?? []).join(", ");
-  els.pUrl.value   = preset?.autoOpenUrl ?? "";
+  els.pSites.value    = (preset?.sites ?? []).join(", ");
+  els.pApps.value     = (preset?.apps ?? []).join(", ");
+  els.pOpenApps.value = (preset?.openApps ?? []).join(", ");
+  els.pUrl.value      = preset?.autoOpenUrl ?? "";
   updateSitesLabel();
   els.presetEditor.classList.add("open");
   els.pName.focus();
@@ -660,6 +699,7 @@ async function savePreset() {
     blockMode:   els.pMode.value,
     sites:       splitList(els.pSites.value).map(normalizeDomain).filter(Boolean),
     apps:        splitList(els.pApps.value),
+    openApps:    splitList(els.pOpenApps.value),
     autoOpenUrl: els.pUrl.value.trim(),
   };
   await sendMsg({ type: "SAVE_PRESET", preset });
@@ -975,6 +1015,13 @@ els.appslist.addEventListener("click", (e) => {
   if (btn) removeApp(btn.dataset.app);
 });
 
+els.addOpenAppBtn.addEventListener("click",  addOpenApp);
+els.openAppInput.addEventListener("keydown", (e) => { if (e.key === "Enter") addOpenApp(); });
+els.openappslist.addEventListener("click", (e) => {
+  const btn = e.target.closest(".remove-openapp");
+  if (btn) removeOpenApp(btn.dataset.app);
+});
+
 els.settingsToggle.addEventListener("click", () => {
   els.settingsPanel.classList.toggle("open");
 });
@@ -1087,6 +1134,7 @@ document.getElementById("durationPill").addEventListener("click", () => {
   renderBlacklist(state.blacklist  ?? []);
   renderWhitelist(state.whitelist  ?? []);
   renderApps(state.blockedApps     ?? []);
+  renderOpenApps(state.openApps    ?? []);
   renderPresetSelect(state.presets ?? [], state.activePresetId);
   renderPresetList(state.presets   ?? []);
   loadSettingsIntoForm(state.settings ?? {});

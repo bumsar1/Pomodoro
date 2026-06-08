@@ -21,7 +21,7 @@ import time
 LOG_PATH = "/tmp/pomodoro_host.log"
 
 # Shared session state, updated by the reader thread, read by the monitor thread.
-state = {"phase": "idle", "apps": []}
+state = {"phase": "idle", "apps": [], "open_apps": [], "last_phase": "idle"}
 state_lock = threading.Lock()
 
 
@@ -120,6 +120,15 @@ def quit_app(name):
         return False
 
 
+def open_app(name):
+    """Launch (or focus) an app by name. Works with the .app display name."""
+    try:
+        subprocess.run(["open", "-a", name], capture_output=True, timeout=5)
+        log(f"opened {name}")
+    except Exception as e:
+        log(f"open {name} error: {e}")
+
+
 def enforce():
     """Quit any blocked apps that are currently running. Returns names killed."""
     with state_lock:
@@ -186,12 +195,21 @@ def main():
             break
 
         if msg.get("type") == "SESSION":
+            new_phase = msg.get("phase", "idle")
             with state_lock:
-                state["phase"] = msg.get("phase", "idle")
-                state["apps"]  = msg.get("apps", [])
-            log(f"session → {state['phase']} apps={state['apps']}")
+                prev = state["last_phase"]
+                state["phase"]     = new_phase
+                state["apps"]      = msg.get("apps", [])
+                state["open_apps"] = msg.get("openApps", [])
+                state["last_phase"] = new_phase
+                to_open = list(state["open_apps"])
+            # Open apps only on the transition INTO work (not on every keep-alive tick)
+            if new_phase == "work" and prev != "work":
+                for app in to_open:
+                    open_app(app)
+            log(f"session → {new_phase} apps={msg.get('apps', [])} open={msg.get('openApps', [])}")
             killed = enforce()
-            send_message({"ok": True, "phase": state["phase"], "killed": killed})
+            send_message({"ok": True, "phase": new_phase, "killed": killed})
 
         elif msg.get("type") == "PRESETS":
             # Persist the preset list so external tools (Raycast generator) can read it

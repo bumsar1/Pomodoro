@@ -17,7 +17,7 @@ async function getSettings() {
 
 async function getState() {
   const data = await chrome.storage.local.get([
-    "phase", "endTime", "blacklist", "whitelist", "blockedApps",
+    "phase", "endTime", "blacklist", "whitelist", "blockedApps", "openApps",
     "round", "focusToday", "lastDate", "currentTask", "focusHistory",
     "goalActive", "goalCycles", "goalCyclesLeft", "goalLastWorkMin",
     "presets", "activePresetId",
@@ -28,6 +28,7 @@ async function getState() {
     blacklist:       data.blacklist       ?? [],
     whitelist:       data.whitelist       ?? [],
     blockedApps:     data.blockedApps     ?? [],
+    openApps:        data.openApps        ?? [],
     round:           data.round           ?? 0,
     focusToday:      data.focusToday      ?? 0,
     lastDate:        data.lastDate        ?? null,
@@ -66,6 +67,7 @@ async function getActiveConfig() {
       blacklist:   allow ? [] : sites,
       whitelist:   allow ? sites : [],
       blockedApps: preset.apps ?? [],
+      openApps:    preset.openApps ?? [],
       autoOpenUrl: preset.autoOpenUrl ?? "",
     };
   }
@@ -75,6 +77,7 @@ async function getActiveConfig() {
     blacklist:   state.blacklist ?? [],
     whitelist:   state.whitelist ?? [],
     blockedApps: state.blockedApps ?? [],
+    openApps:    state.openApps ?? [],
     autoOpenUrl: "",
   };
 }
@@ -170,7 +173,12 @@ async function sendToNative(phase) {
   const port = connectNativeHost();
   if (!port) return;
   try {
-    port.postMessage({ type: "SESSION", phase, apps: cfg.blockedApps ?? [] });
+    port.postMessage({
+      type: "SESSION",
+      phase,
+      apps: cfg.blockedApps ?? [],
+      openApps: cfg.openApps ?? [],
+    });
   } catch (e) {
     nativePort = null;
   }
@@ -524,6 +532,10 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         await setState({ blockedApps: msg.blockedApps });
         // If a work session is active, push the new list to the native host now
         if (state.phase === "work") sendToNative("work");
+        break;
+      }
+      case "UPDATE_OPEN_APPS": {
+        await setState({ openApps: msg.openApps });
         break;
       }
       case "FINISH": {
